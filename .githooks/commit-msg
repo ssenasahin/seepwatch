@@ -1,0 +1,8 @@
+#!/bin/sh
+# Every commit in this repository is written by its author. Reject messages that
+# carry an AI attribution line so one can never slip into the history by accident.
+P="co-authored-by:.*claude|noreply@anthropic|generated with.*claude"
+if grep -qiE "$P" "$1"; then
+  echo "Commit message contains an AI attribution line."
+  exit 1
+fi
