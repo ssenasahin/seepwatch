@@ -1,0 +1,30 @@
+# Dependencies are restored with `npm install`, never committed.
+node_modules/
+
+# Build output is reproducible from source.
+dist/
+*.tsbuildinfo
+db/src/generated/
+
+# Real secrets live only in .env on each machine; .env.example is the template.
+.env
+.env.*
+!.env.example
+
+# Test coverage reports are generated locally and in CI.
+coverage/
+
+# Editor and OS noise.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs from local runs.
+*.log
+npm-debug.log*
+
+# AI tooling stays local.
+.claude/
+CLAUDE.md
+CLAUDE.local.md

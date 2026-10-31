@@ -1,0 +1,14 @@
+# The image installs and builds from source; nothing local should leak in.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/coverage
+.git
+.github
+# Secrets in any folder, deployments/.env above all, must never end up in an image.
+**/.env
+**/.env.*
+docs
+.claude
+CLAUDE.md
+CLAUDE.local.md
