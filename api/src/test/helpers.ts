@@ -1,0 +1,117 @@
+import { createPrisma, type Mail, type Mailer, type Transport } from "@seepwatch/db";
+import { generate } from "otplib";
+import request, { type Response } from "supertest";
+import { createApp } from "../app.js";
+import type { SystemProbe } from "../admin/system.js";
+import type { Env } from "../env.js";
+import { TEST_DATABASE_URL } from "./database.js";
+
+export const testEnv: Env = {
+  NODE_ENV: "test",
+  API_PORT: 0,
+  DATABASE_URL: TEST_DATABASE_URL,
+  WEB_ORIGIN: "http://localhost:5173",
+  REDIS_URL: "redis://127.0.0.1:6379",
+  JWT_SECRET: "test-secret-that-is-at-least-thirty-two-characters",
+  ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+  SMTP_HOST: "127.0.0.1",
+  SMTP_PORT: 1025,
+  MAIL_FROM: "Seepwatch <test@seepwatch.local>",
+  TRUST_PROXY: 0,
+  AUTH_RATE_LIMIT_PER_MINUTE: 1000,
+};
+
+export const prisma = createPrisma(TEST_DATABASE_URL);
+
+// Collects outgoing email instead of sending it.
+export const outbox: Mail[] = [];
+const memoryMailer: Mailer = {
+  async send(mail) {
+    outbox.push(mail);
+  },
+};
+
+// Every table hangs off users, so truncating it with CASCADE empties them all.
+export async function resetDatabase(): Promise<void> {
+  outbox.length = 0;
+  deliveries.length = 0;
+  deliveryAnswer.status = 200;
+  await prisma.$executeRawUnsafe("TRUNCATE TABLE users CASCADE");
+}
+
+// Alerts to Slack, Telegram and webhooks, caught on the way out. Tests set the answer.
+export const deliveries: { url: string; body: string; headers: Record<string, string> }[] = [];
+export const deliveryAnswer = { status: 200 };
+const memoryTransport: Transport = async (url, body, headers) => {
+  deliveries.push({ url, body, headers });
+  return { status: deliveryAnswer.status, text: deliveryAnswer.status === 200 ? "ok" : "" };
+};
+
+// Fake DNS for the SSRF tests. Any name not listed here doesn't exist.
+export const dnsRecords: Record<string, string[]> = {
+  "example.com": ["93.184.215.14", "2606:2800:21f:cb07:6820:80da:af6b:8b2c"],
+  "status.example.org": ["203.0.114.10"],
+  "api.example.com": ["93.184.215.20"],
+  "intranet.example.com": ["10.0.0.12"],
+  "sneaky.example.com": ["93.184.215.14", "127.0.0.1"],
+  localhost: ["127.0.0.1", "::1"],
+};
+
+async function fakeResolve(hostname: string): Promise<string[]> {
+  const addresses = dnsRecords[hostname];
+  if (!addresses)
+    throw Object.assign(new Error(`getaddrinfo ENOTFOUND ${hostname}`), { code: "ENOTFOUND" });
+  return addresses;
+}
+
+export function makeApp(env: Partial<Env> = {}, system?: SystemProbe) {
+  return createApp({
+    env: { ...testEnv, ...env },
+    prisma,
+    mailer: memoryMailer,
+    resolveHost: fakeResolve,
+    channelTransport: memoryTransport,
+    system,
+  });
+}
+
+// Pulls the refresh cookie out of a response, as a browser would store it.
+export function refreshCookie(res: Response): string | undefined {
+  const header = res.headers["set-cookie"] as unknown as string[] | undefined;
+  return header?.find((c) => c.startsWith("seepwatch_refresh="));
+}
+
+export function cookiePair(setCookie: string): string {
+  return setCookie.split(";")[0]!;
+}
+
+export const GOOD_PASSWORD = "amber-lantern-over-the-harbour";
+
+export async function signUp(app: ReturnType<typeof makeApp>, email = "ada@example.com") {
+  const res = await request(app)
+    .post("/api/auth/register")
+    .send({ email, password: GOOD_PASSWORD });
+  return { accessToken: res.body.accessToken as string, cookie: cookiePair(refreshCookie(res)!) };
+}
+
+// Turns two-factor on for a signed-in user and returns what the app would hold.
+export async function enableTwoFactor(app: ReturnType<typeof makeApp>, accessToken: string) {
+  const setup = await request(app)
+    .post("/api/auth/2fa/setup")
+    .set("Authorization", `Bearer ${accessToken}`);
+  const secret = setup.body.secret as string;
+  const verified = await request(app)
+    .post("/api/auth/2fa/verify")
+    .set("Authorization", `Bearer ${accessToken}`)
+    .send({ code: await generate({ secret }) });
+  return {
+    secret,
+    backupCodes: verified.body.backupCodes as string[],
+    accessToken: verified.body.accessToken as string,
+  };
+}
+
+// A valid code for the next 30-second step, which the last-used-step rule accepts.
+export function nextCode(secret: string) {
+  return generate({ secret, epoch: Math.floor(Date.now() / 1000) + 30 });
+}
