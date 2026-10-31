@@ -1,0 +1,169 @@
+/* Lists of channels, people, policies and keys: one row each, actions on the right. */
+
+.item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item-row {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+}
+
+.item-row + .item-row {
+  border-top: 1px solid var(--line);
+}
+
+.item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: 600;
+}
+
+.item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.item-meta .is-error {
+  color: var(--bad);
+}
+
+.item-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.item-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--muted);
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-head p {
+  margin-top: var(--space-1);
+}
+
+.inline-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.inline-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.inline-form-row > .field {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* Buttons beside an input line up with the input, not its label. */
+.inline-form-row > .btn {
+  margin-top: calc(var(--text-sm) * 1.5 + var(--space-2));
+}
+
+.form-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.help-text {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.help-text ol {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.2em;
+}
+
+/* A secret shown once: the value, a copy button, and what to do with it. */
+.secret-once {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.secret-value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.secret-value code {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.switch {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.switch input {
+  accent-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .item-row {
+    flex-wrap: wrap;
+    padding: var(--space-4);
+  }
+
+  .item-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+.narrow-card {
+  max-width: 560px;
+}

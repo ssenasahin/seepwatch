@@ -1,0 +1,109 @@
+/* A policy read top to bottom: when each step fires, and who it reaches. */
+
+.steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 12rem) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+  counter-increment: step;
+}
+
+.step::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.step-when {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.step-who {
+  overflow-wrap: anywhere;
+}
+
+.step-editor {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step-editor > li {
+  display: grid;
+  justify-items: stretch;
+}
+
+.step-arrow {
+  justify-self: center;
+  margin-bottom: var(--space-2);
+  color: var(--faint);
+}
+
+.step-card {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+
+.step-legend {
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.step-wait {
+  max-width: 320px;
+}
+
+.step-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.step-targets .switch {
+  color: var(--text);
+}
+
+.step-remove {
+  justify-self: start;
+}
+
+.faint {
+  color: var(--faint);
+}
+
+@media (max-width: 640px) {
+  .step {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .step-who {
+    grid-column: 2;
+  }
+}
