@@ -1,0 +1,103 @@
+/*
+ * Design tokens. Every colour, size and radius in the app comes from here, so the
+ * brand can change in one place. Dark is the default; light is opt-in.
+ */
+:root {
+  /* Surfaces, from the page background up to raised elements like menus. */
+  --bg: #0b0d10;
+  --surface: #111418;
+  --raised: #171b21;
+  --line: #22272e;
+  --line-strong: #2f353d;
+
+  /* Text. --muted still clears 4.5:1 contrast on --bg for body copy. */
+  --text: #e8eaed;
+  --muted: #8b939d;
+  --faint: #5c636c;
+
+  /* The single brand accent: a lantern's amber. --accent-ink is text placed on it. */
+  --accent: #f5a524;
+  --accent-hover: #ffb84a;
+  --accent-ink: #1b1204;
+  --accent-soft: rgb(245 165 36 / 12%);
+
+  /*
+   * Status colours. Degraded leans orange so it never reads as the accent.
+   * Status is always paired with an icon and a word, never shown by colour alone.
+   */
+  --good: #3fb950;
+  --bad: #f25f5c;
+  --warn: #f0803c;
+  --info: #5b9df5;
+  --good-soft: rgb(63 185 80 / 12%);
+  --bad-soft: rgb(242 95 92 / 12%);
+  --warn-soft: rgb(240 128 60 / 12%);
+  --info-soft: rgb(91 157 245 / 12%);
+
+  /*
+   * Charts. The series colour is a step darker than the accent: a 2px line needs
+   * a mid-lightness hue to hold up against the surface (checked with the dataviz
+   * palette validator in both themes). Gridlines are the quietest line we have.
+   */
+  --chart-1: #c47d0f;
+  --chart-1-wash: rgb(196 125 15 / 10%);
+  --chart-grid: var(--line);
+
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.625rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --content-width: 1120px;
+  --sidebar-width: 232px;
+  --topbar-height: 56px;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --raised: #f4f2ee;
+  --line: #e6e2db;
+  --line-strong: #d6d0c6;
+
+  --text: #16181b;
+  --muted: #5d636b;
+  --faint: #8d9298;
+
+  /* Amber is too light for text on white, so the light theme uses a deeper shade. */
+  --accent: #9e5f00;
+  --accent-hover: #844f00;
+  --accent-ink: #ffffff;
+  --accent-soft: rgb(158 95 0 / 10%);
+
+  --good: #1a7f37;
+  --bad: #c9302c;
+  --warn: #b5501a;
+  --info: #2563c9;
+
+  --chart-1: #9e5f00;
+  --chart-1-wash: rgb(158 95 0 / 10%);
+
+  color-scheme: light;
+}

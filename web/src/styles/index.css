@@ -1,0 +1,8 @@
+/* Fonts are bundled with the app instead of loaded from a CDN: no third-party request. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
+@import "./tokens.css";
+@import "./base.css";
+@import "./shared.css";
