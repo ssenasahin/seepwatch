@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Start every job with no token permissions; each job asks only for what it uses.
+permissions: {}
+
+# A newer push to the same branch makes the older run pointless, so cancel it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Needed to clone the repository, and nothing more.
+      contents: read
+
+    # The API tests run against a real Postgres, as they do locally; a mock would
+    # hide the very bugs they exist to catch (constraints, concurrent updates).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: seepwatch
+          POSTGRES_PASSWORD: seepwatch
+          POSTGRES_DB: seepwatch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U seepwatch"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL_TEST: postgresql://seepwatch:seepwatch@localhost:5432/seepwatch_test
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The job never pushes, so don't leave the token in .git/config.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `npm ci` installs exactly what package-lock.json says and fails if the
+      # lockfile is out of date, so CI never resolves different versions than we did.
+      - run: npm ci
+
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
