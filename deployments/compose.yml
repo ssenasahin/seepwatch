@@ -1,0 +1,121 @@
+# Production: everything on one machine with Docker. From the repository root:
+#   cp deployments/.env.example deployments/.env   (then fill it in)
+#   docker compose -f deployments/compose.yml --env-file deployments/.env up -d --build
+name: seepwatch-prod
+
+x-app: &app
+  build:
+    context: ..
+    target: app
+  image: seepwatch-app
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    WEB_ORIGIN: https://${DOMAIN}
+    # Caddy is the one proxy in front of the API; the client IP comes from it.
+    TRUST_PROXY: "1"
+
+services:
+  postgres:
+    build:
+      context: ..
+      target: postgres
+    image: seepwatch-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # No ports: only the containers on this network can reach the database.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    environment:
+      # redis-cli reads its password from here, so the health check needs no argument.
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    # BullMQ needs its keys to survive memory pressure, and the schedule to survive
+    # a restart, so never evict and append every write to disk.
+    command:
+      [
+        "redis-server",
+        "--requirepass",
+        "${REDIS_PASSWORD:?set REDIS_PASSWORD in deployments/.env}",
+        "--maxmemory-policy",
+        "noeviction",
+        "--appendonly",
+        "yes",
+      ]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      # redis-cli exits 0 on an error reply too, so look for the answer itself.
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Applies new migrations, then exits; the api and worker wait for it.
+  migrate:
+    <<: *app
+    restart: "no"
+    command:
+      [
+        "node",
+        "node_modules/prisma/build/index.js",
+        "migrate",
+        "deploy",
+        "--config",
+        "db/prisma.config.ts",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ["node", "api/dist/index.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ["node", "worker/dist/index.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      target: web
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:

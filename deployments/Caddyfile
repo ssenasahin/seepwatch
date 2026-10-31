@@ -1,0 +1,29 @@
+# DOMAIN is the public host name, e.g. seepwatch.example.com. Caddy fetches and renews
+# its HTTPS certificate on its own; port 80 and 443 must reach this machine.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# The API shares the dashboard's origin, so the refresh cookie stays first-party.
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		root * /srv
+		# Hashed file names change with every build, so they can be cached for good.
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		# Every other path is a page of the single-page app.
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# The API sets its own, stricter policy on /api.
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+}
