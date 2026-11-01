@@ -14,15 +14,16 @@ accounts, team, alert channels, escalation policies, signed links and admin pane
 
 The foundation runs: sign-up and sign-in with two-factor, teams and invites, Slack, Telegram and
 webhook channels, escalation policies, API keys and the admin panel with its audit log. You can add
-watches and prove they're yours. The worker scans GitHub for them and records what it finds, and the
-overview lists the latest findings. No incident is opened yet, so a finding doesn't alert anyone.
+watches and prove they're yours. The worker scans GitHub for them, opens an incident for each new
+leak and keeps alerting until someone marks it revoked. Alerts link to a page where anyone who got
+one can say "I'm on it" or "it's revoked" without signing in. The overview counts active leaks and
+lists the latest findings.
 
 What comes next, in order:
 
-1. The incident state machine, escalation that repeats until revoked, and signed links with two
-   actions: "I'm on it" and "revoked".
-2. Gist and paste site sources.
-3. The pages for findings and incidents.
+1. Gist and paste site sources.
+2. The pages for findings and incidents, where a leak can also be closed as a false positive or an
+   accepted risk. Until then the API does it: `POST /api/incidents/:id/actions`.
 
 ## Watches
 
@@ -69,6 +70,29 @@ Proof is checked again every night. A domain can expire and be bought by someone
 organization can change hands, so a watch whose token is missing three nights in a row stops being
 scanned until its owner proves it again.
 
+## Incidents
+
+Every new finding opens an incident, and its first alert goes out within half a minute. Where the
+incident goes from there:
+
+| Status         | How it gets there                      | What happens                                  |
+| -------------- | -------------------------------------- | --------------------------------------------- |
+| Open           | A secret is found for the first time   | The escalation policy runs, step by step      |
+| Acknowledged   | Someone says "I'm on it"               | No more escalation; reminders every 4 hours   |
+| Revoked        | Someone says the key no longer works   | Everyone alerted hears it's over; alerts stop |
+| False positive | Closed in the dashboard, with a reason | The same                                      |
+| Risk accepted  | Closed in the dashboard, with a reason | The same                                      |
+
+While an incident is open, each step of the watch's escalation policy is alerted in turn. Once the
+steps run out, everyone alerted so far hears about it again every hour until someone responds. A
+watch without a policy alerts you and every channel at once, then hourly. A closed incident stays
+closed. If the same secret turns up somewhere else, its incident's timeline says so and no new
+incident is opened.
+
+The worker doesn't keep a delayed job per alert. Each incident stores when its next round is due,
+and the worker looks for due rounds every 30 seconds. Responding only changes that time, so there
+is never a queued alert that has to be found and cancelled.
+
 ## Design decisions
 
 **A raw secret is never stored.** A finding keeps a fingerprint of the secret (HMAC-SHA256 with a
@@ -86,10 +110,11 @@ would collect other people's leaks.
 
 **Acknowledging doesn't stop the alarm.** An incident goes from open to acknowledged to revoked, or is
 closed as a false positive or an accepted risk with a written reason. Acknowledging moves the
-escalation to reminders; only "revoked" ends it.
+escalation to reminders; only closing ends it, and from an alert the only way to close is "revoked".
 
 **Signed links can't be clicked by a mail scanner.** Opening a link from an alert shows a page; the
 action itself is a POST from that page, signed with HMAC-SHA256 for that incident and that recipient.
+The timeline shows who acted: the address the link was emailed to, or the channel it was posted in.
 
 ## What is stored
 
@@ -111,6 +136,7 @@ api/                  Express API
   src/team/           team members and invites
   src/watches/        watches, their values and verification
   src/findings/       findings and where each was seen
+  src/incidents/      incidents, their actions and the page alerts link to
   src/api-keys/       API keys
   src/admin/          users, plans, system health and the audit log
 worker/               BullMQ worker
@@ -119,10 +145,14 @@ worker/               BullMQ worker
   src/scan-search.ts  code search for domains and addresses
   src/scan.ts         which watches are due, and running one scan
   src/reverify.ts     the nightly re-check of each proof
+  src/incidents.ts    opening incidents for new findings
+  src/alerts.ts       alert rounds: who hears what, and when the next one is due
+  src/notify.ts       alert emails and channel messages
 db/                   Prisma schema, migrations and the code api and worker share
   src/network.ts      the SSRF guard for webhook deliveries
   src/crypto.ts       AES-256-GCM for secret columns
   src/escalation.ts   escalation steps and signed links
+  src/incidents.ts    the incident rules: which action goes where, and each alert round
   src/watches.ts      key patterns as safe regular expressions
   src/detectors.ts    the detectors, masking and fingerprints
   src/verification.ts DNS TXT and GitHub file verification
