@@ -3,7 +3,6 @@ import { HttpError } from "./http.js";
 
 export interface Limits {
   plan: string;
-  // Enforced once watches exist; shown in the admin panel until then.
   maxWatches: number;
   maxChannels: number;
   maxApiKeys: number;
@@ -39,6 +38,11 @@ export async function limitsOf(prisma: PrismaClient, userId: string): Promise<Li
 }
 
 const COUNTERS = {
+  watches: {
+    limit: (l: Limits) => l.maxWatches,
+    count: (p: PrismaClient, ownerId: string) => p.watch.count({ where: { ownerId } }),
+    message: (n: number) => `Your plan allows up to ${n} watches`,
+  },
   channels: {
     limit: (l: Limits) => l.maxChannels,
     count: (p: PrismaClient, ownerId: string) =>
