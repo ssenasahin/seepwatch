@@ -18,6 +18,9 @@ const styleGuide = async () => ({
   Component: (await import("./pages/StyleGuide")).StyleGuidePage,
 });
 const brand = async () => ({ Component: (await import("./pages/Brand")).BrandPage });
+const watches = async () => ({
+  Component: (await import("./pages/watches/Watches")).WatchesPage,
+});
 const channels = async () => ({
   Component: (await import("./pages/alerts/Channels")).ChannelsPage,
 });
@@ -70,6 +73,7 @@ const router = createBrowserRouter([
         element: <Layout />,
         children: [
           { path: "/", element: <OverviewPage />, handle: title("Overview") },
+          { path: "/watches", lazy: watches, handle: title("Watches") },
           { path: "/channels", lazy: channels, handle: title("Channels") },
           { path: "/escalation", lazy: escalation, handle: title("Escalation") },
           { path: "/team", lazy: team, handle: title("Team") },

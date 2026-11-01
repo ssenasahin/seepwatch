@@ -1,6 +1,7 @@
 import {
   Activity,
   BellRing,
+  Eye,
   Gauge,
   KeyRound,
   ListOrdered,
@@ -42,7 +43,10 @@ interface NavSection {
 const NAV: NavSection[] = [
   {
     heading: "Watch",
-    items: [{ to: "/", label: "Overview", icon: Radar }],
+    items: [
+      { to: "/", label: "Overview", icon: Radar },
+      { to: "/watches", label: "Watches", icon: Eye },
+    ],
   },
   {
     heading: "Alerts",
