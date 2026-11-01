@@ -14,16 +14,14 @@ accounts, team, alert channels, escalation policies, signed links and admin pane
 
 The foundation runs: sign-up and sign-in with two-factor, teams and invites, Slack, Telegram and
 webhook channels, escalation policies, API keys and the admin panel with its audit log. You can add
-watches and prove they're yours. The worker scans GitHub for them, opens an incident for each new
-leak and keeps alerting until someone marks it revoked. Alerts link to a page where anyone who got
+watches and prove they're yours. The worker scans GitHub, public gists and (with a Pastebin Pro
+account) Pastebin for them, opens an incident for each new leak and keeps alerting until someone
+marks it revoked. Alerts link to a page where anyone who got
 one can say "I'm on it" or "it's revoked" without signing in. The overview counts active leaks and
 lists the latest findings.
 
-What comes next, in order:
-
-1. Gist and paste site sources.
-2. The pages for findings and incidents, where a leak can also be closed as a false positive or an
-   accepted risk. Until then the API does it: `POST /api/incidents/:id/actions`.
+What comes next: the pages for findings and incidents, where a leak can also be closed as a false
+positive or an accepted risk. Until then the API does it: `POST /api/incidents/:id/actions`.
 
 ## Watches
 
@@ -49,7 +47,7 @@ once. Deleting a domain deletes the addresses on it.
 
 ## Scanning
 
-The worker looks at GitHub in two ways.
+The worker looks for leaks in four places.
 
 Verified organizations are read commit by commit, every 15 minutes. The scan lists the
 organization's public repositories (forks and archived ones are skipped), reads the commits made
@@ -61,6 +59,15 @@ Verified domains and the addresses on them go through GitHub's code search every
 counts only if it sits within 10 lines of a mention of the domain or address; otherwise every key in
 any file that mentions `example.com` once would be yours. Your own key patterns count anywhere in
 such a file. Code search needs `GITHUB_TOKEN`, because GitHub refuses it to anonymous callers.
+
+Gists and pastes can't be searched that way, so they're read as feeds instead. Every 5 minutes the
+worker reads the public gists created or updated since its last run, up to 300, and matches each
+file against every verified domain and address at once, with the same 10-line rule. The first run
+starts an hour back. Pastebin works the same way every 2 minutes, through its scraping API. That API
+needs a lifetime Pro account and answers only the IP address registered with it, so it stays off
+unless `PASTEBIN_SCRAPING` is `true`. Other paste sites offer no sanctioned way to read new
+pastes, and Seepwatch doesn't scrape them. The admin panel's system health page shows how far each
+feed got and why it last stopped short.
 
 The built-in detectors know AWS access keys, GitHub tokens, Slack tokens and webhooks, Stripe live
 keys, Google API keys and private key blocks. When a scan stops short, for example because the rate
@@ -143,6 +150,8 @@ worker/               BullMQ worker
   src/github.ts       the GitHub API calls the scanners make
   src/scan-org.ts     reading an organization's new commits
   src/scan-search.ts  code search for domains and addresses
+  src/feeds.ts        the gist and Pastebin feeds, matched against every watch
+  src/match.ts        whether a key sits near a mention of a domain or address
   src/scan.ts         which watches are due, and running one scan
   src/reverify.ts     the nightly re-check of each proof
   src/incidents.ts    opening incidents for new findings
