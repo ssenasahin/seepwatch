@@ -20,6 +20,7 @@ import { authRouter } from "./auth/routes.js";
 import { channelRouter } from "./channels/routes.js";
 import type { Env } from "./env.js";
 import { escalationRouter } from "./escalation/routes.js";
+import { findingRouter } from "./findings/routes.js";
 import { healthRouter } from "./health.js";
 import { errorHandler } from "./http.js";
 import { rejectCrossSiteRequests } from "./origin.js";
@@ -92,6 +93,7 @@ export function createApp({
     }),
   );
   app.use("/api/watches", watchRouter({ prisma, authenticate, resolveTxt, fetchGithubFile }));
+  app.use("/api/findings", findingRouter(prisma, authenticate));
   app.use("/api/team", teamRouter({ prisma, mailer, authenticate, webOrigin: env.WEB_ORIGIN }));
   app.use("/api/escalation-policies", escalationRouter(prisma, authenticate));
   app.use("/api/api-keys", apiKeyRouter(prisma, authenticate));
