@@ -1,0 +1,93 @@
+/* A watch is a row, with its proof instructions under it until it's verified. */
+
+.watch-item + .watch-item {
+  border-top: 1px solid var(--line);
+}
+
+/* alerts.css draws lines between rows; here the item draws them, so the proof panel
+   stays attached to its row. */
+.watch-item .item-row + .item-row {
+  border-top: 0;
+}
+
+.select-sm {
+  width: auto;
+  max-width: 200px;
+  height: 32px;
+  font-size: var(--text-sm);
+}
+
+.prove {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 var(--space-5) var(--space-4);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  font-size: var(--text-sm);
+}
+
+.prove p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.prove-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  margin: 0;
+}
+
+.prove-fields dt {
+  color: var(--muted);
+}
+
+.prove-fields dd {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+}
+
+.prove-fields code {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.prove-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.prove-check .is-error {
+  color: var(--bad);
+}
+
+@media (max-width: 720px) {
+  .watch-item .item-row {
+    flex-wrap: wrap;
+  }
+
+  .watch-item .item-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .prove {
+    margin: 0 var(--space-4) var(--space-4);
+  }
+
+  .prove-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
