@@ -65,6 +65,14 @@ export interface QueueStat {
   workers: number;
 }
 
+export interface FeedStat {
+  source: "GIST" | "PASTEBIN";
+  cursor: string | null;
+  lastRunAt: string | null;
+  lastRead: number;
+  lastError: string | null;
+}
+
 export interface SystemHealth {
   generatedAt: string;
   queues: QueueStat[] | null;
@@ -73,6 +81,7 @@ export interface SystemHealth {
   redis: { bytes: number | null };
   users: number;
   liveSessions: number;
+  feeds: FeedStat[];
 }
 
 export const adminKeys = {

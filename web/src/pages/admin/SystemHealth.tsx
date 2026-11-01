@@ -7,7 +7,10 @@ import "./admin.css";
 const QUEUE_NAMES: Record<string, string> = {
   scans: "Scans",
   alerts: "Alert rounds",
+  feeds: "Gist and paste feeds",
 };
+
+const FEED_NAMES = { GIST: "Public gists", PASTEBIN: "Pastebin" };
 
 // Refreshed every 10 seconds.
 export function SystemHealthPage() {
@@ -106,6 +109,36 @@ function HealthBody({ health: h }: { health: SystemHealth }) {
                     <td className="num">{q.delayed}</td>
                     <td className={`num${q.failed ? " is-bad" : ""}`}>{q.failed}</td>
                     <td className={`num${q.workers ? "" : " is-bad"}`}>{q.workers}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {h.feeds.length > 0 && (
+        <section className="card">
+          <div className="card-body checks-head">
+            <h2 className="section-title">Public feeds</h2>
+          </div>
+          <div className="table-scroll">
+            <table className="checks">
+              <thead>
+                <tr>
+                  <th>Feed</th>
+                  <th>Last run</th>
+                  <th className="num">Posts read</th>
+                  <th>Problem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {h.feeds.map((f) => (
+                  <tr key={f.source}>
+                    <td>{FEED_NAMES[f.source]}</td>
+                    <td>{f.lastRunAt ? timeAgo(f.lastRunAt) : "Never"}</td>
+                    <td className="num">{f.lastRead}</td>
+                    <td className={f.lastError ? "is-bad" : "muted"}>{f.lastError ?? "None"}</td>
                   </tr>
                 ))}
               </tbody>
