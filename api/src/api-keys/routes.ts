@@ -8,7 +8,7 @@ import { HttpError, validate } from "../http.js";
 import { SUSPENDED } from "../auth/shared.js";
 import { assertRoomFor } from "../plans.js";
 
-const KEY_PREFIX = "lnly_sk_";
+const KEY_PREFIX = "spw_sk_";
 // Writing last_used_at on every request would turn reads into writes; once a minute
 // is precise enough to tell a key in use from a forgotten one.
 const TOUCH_EVERY_MS = 60_000;
@@ -31,7 +31,7 @@ export function requireApiKey(prisma: PrismaClient): RequestHandler {
     const header = req.get("authorization");
     const key = header?.startsWith("Bearer ") ? header.slice(7) : "";
     if (!key.startsWith(KEY_PREFIX)) {
-      throw new HttpError(401, "Send an API key: Authorization: Bearer lnly_sk_…");
+      throw new HttpError(401, "Send an API key: Authorization: Bearer spw_sk_…");
     }
     const found = await prisma.apiKey.findUnique({
       where: { keyHash: sha256(key) },
