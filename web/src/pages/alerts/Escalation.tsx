@@ -116,7 +116,9 @@ function PolicyCard({
         <div>
           <h2 className="security-title">{policy.name}</h2>
           <p className="muted">
-            {policy.steps.length === 1 ? "1 step" : `${policy.steps.length} steps`}
+            {policy.watches.length === 0
+              ? "Not used by any watch yet. Pick it on the Watches page."
+              : `Used by ${policy.watches.map((w) => w.label ?? w.value).join(", ")}`}
           </p>
         </div>
         <div className="item-actions">
@@ -129,7 +131,7 @@ function PolicyCard({
             onClick={() => {
               if (
                 confirm(
-                  `Delete "${policy.name}"? Leaks it covered will alert you and every channel instead.`,
+                  `Delete "${policy.name}"? Its watches will alert you and every channel instead.`,
                 )
               ) {
                 remove.mutate();

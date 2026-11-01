@@ -44,6 +44,7 @@ export interface EscalationPolicy {
   id: string;
   name: string;
   steps: EscalationStep[];
+  watches: { id: string; kind: string; value: string; label: string | null }[];
   createdAt: string;
   updatedAt: string;
 }
