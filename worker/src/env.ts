@@ -22,6 +22,12 @@ const schema = z.object({
     .transform((v) => v || undefined),
   // Watches scanned at once. GitHub's limits, not the CPU, are what this protects.
   SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
+  // Pastebin's scraping API answers only an IP address registered with a lifetime Pro
+  // account. Set this to "true" on a machine that is.
+  PASTEBIN_SCRAPING: z
+    .enum(["true", "false", ""])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type WorkerEnv = z.infer<typeof schema>;
