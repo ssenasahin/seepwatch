@@ -48,6 +48,10 @@ enum FindingSource {
   GITHUB_COMMIT
   // A file GitHub's code search found by one of the owner's domains or addresses.
   GITHUB_CODE
+  // A public gist that mentions one of the owner's domains or addresses.
+  GIST
+  // A Pastebin paste that does, read through Pastebin's scraping API.
+  PASTEBIN
 }
 
 // Email isn't a channel: alerts are emailed to the account's owner and to team
@@ -384,9 +388,12 @@ model FindingLocation {
   id          BigInt        @id @default(autoincrement())
   findingId   String        @map("finding_id") @db.Uuid
   source      FindingSource
-  // A link to the exact line, pinned to the commit so it doesn't drift.
+  // A link to the exact line, pinned to the commit so it doesn't drift where the
+  // source allows it.
   url         String
+  // For a gist, its owner and id ("ada/1f2e…"); for a paste, its key.
   repository  String
+  // The file within it; a paste's title, or "paste" without one.
   path        String
   commitSha   String?       @map("commit_sha")
   line        Int?
@@ -442,4 +449,19 @@ model IncidentEvent {
 
   @@index([incidentId, at])
   @@map("incident_events")
+}
+
+// How far each feed of public posts (gists, pastes) has been read. These sources
+// aren't searched per watch: every new post is read once and matched against all
+// watched domains and addresses.
+model FeedState {
+  source    FindingSource @id
+  // Posts up to this moment have been read.
+  cursor    DateTime?
+  lastRunAt DateTime?     @map("last_run_at")
+  // How many posts the last run read, and why it stopped short if it did.
+  lastRead  Int           @default(0) @map("last_read")
+  lastError String?       @map("last_error")
+
+  @@map("feed_states")
 }
