@@ -31,6 +31,7 @@ const rowSelect = {
   lockedUntil: true,
   totpEnabledAt: true,
   plan: { select: { id: true, name: true } },
+  _count: { select: { watches: true } },
 } as const;
 
 type Row = Prisma.UserGetPayload<{ select: typeof rowSelect }>;
@@ -46,6 +47,7 @@ function presentRow(u: Row, now = new Date()) {
     lockedUntil: u.lockedUntil && u.lockedUntil > now ? u.lockedUntil : null,
     twoFactor: u.totpEnabledAt !== null,
     plan: u.plan,
+    watches: u._count.watches,
   };
 }
 
