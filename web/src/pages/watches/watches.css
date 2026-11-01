@@ -91,3 +91,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Why the last scan stopped short: a rate limit, a missing token. */
+.item-warning {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--warn);
+}

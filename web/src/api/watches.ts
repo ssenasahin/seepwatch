@@ -27,6 +27,9 @@ export interface Watch {
   keyPattern: { charset: KeyCharset; minLength: number; maxLength: number } | null;
   verification: Verification;
   escalationPolicy: { id: string; name: string } | null;
+  // Null until the first scan. Key patterns aren't scanned on their own.
+  lastScanAt: string | null;
+  lastScanError: string | null;
   createdAt: string;
 }
 

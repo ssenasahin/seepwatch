@@ -179,7 +179,15 @@ function WatchRow({ watch: w }: { watch: Watch }) {
             <span>{kindLabel}</span>
             {w.label && <span className="mono">{w.value}</span>}
             {describe(w) && <span>{describe(w)}</span>}
+            {w.kind !== "KEY_PATTERN" && w.enabled && isVerified(w) && (
+              <span>
+                {w.lastScanAt ? `Scanned ${timeAgo(w.lastScanAt)}` : "First scan pending"}
+              </span>
+            )}
           </div>
+          {w.lastScanError && w.enabled && isVerified(w) && (
+            <div className="item-warning">{w.lastScanError}</div>
+          )}
         </div>
         <div className="item-actions">
           <select
