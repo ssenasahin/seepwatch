@@ -47,7 +47,19 @@ export {
   type EscalationStep,
   type EscalationTarget,
 } from "./escalation.js";
-export { redisConnection } from "./queues.js";
+export { redisConnection, SCANS_QUEUE, type ScanJob } from "./queues.js";
+export {
+  detect,
+  DETECTORS,
+  detectorLabel,
+  fingerprint,
+  fingerprintKey,
+  KEY_PATTERN_DETECTOR,
+  mask,
+  redactedContext,
+  type Detector,
+  type Hit,
+} from "./detectors.js";
 export {
   KEY_LENGTH_MAX,
   KEY_LENGTH_MIN,
