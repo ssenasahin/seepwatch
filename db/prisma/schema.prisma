@@ -42,6 +42,14 @@ enum KeyCharset {
   BASE64URL
 }
 
+// Where a leaked secret was seen. Gists and paste sites join this list later.
+enum FindingSource {
+  // A line added by a commit to one of the owner's organizations' repositories.
+  GITHUB_COMMIT
+  // A file GitHub's code search found by one of the owner's domains or addresses.
+  GITHUB_CODE
+}
+
 // Email isn't a channel: alerts are emailed to the account's owner and to team
 // members who accepted an invite, never to an address someone merely typed in.
 enum ChannelType {
@@ -74,6 +82,7 @@ model User {
 
   channels    NotificationChannel[]
   watches     Watch[]
+  findings    Finding[]
   ownedTeam   Team?
   apiKeys     ApiKey[]
   memberships TeamMember[]
@@ -292,6 +301,14 @@ model Watch {
   lastVerifyAt       DateTime?   @map("last_verify_at")
   // Why the last attempt failed, in words for the owner; null after a success.
   lastVerifyError    String?     @map("last_verify_error")
+  // Daily re-checks that failed in a row. Three take the verification away: the
+  // domain or organization may have changed hands.
+  verifyFailures     Int         @default(0) @map("verify_failures")
+  // When the last scan finished, and why it stopped short if it did.
+  lastScanAt         DateTime?   @map("last_scan_at")
+  lastScanError      String?     @map("last_scan_error")
+  // Where an organization scan picks up: commits after this moment are still to read.
+  scanCursor         DateTime?   @map("scan_cursor")
   // A paused watch keeps its verification but isn't scanned.
   enabled            Boolean     @default(true)
   // Who hears about a leak it finds. Null: the owner and every channel, at once.
@@ -303,8 +320,58 @@ model Watch {
   domainWatch      Watch?            @relation("DomainAddresses", fields: [domainWatchId], references: [id], onDelete: Cascade)
   addresses        Watch[]           @relation("DomainAddresses")
   escalationPolicy EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id], onDelete: SetNull)
+  findings         Finding[]
 
   @@unique([ownerId, kind, value])
   @@index([domainWatchId])
   @@map("watches")
+}
+
+// One leaked secret, however many places it turned up in. The secret itself is never
+// stored: the fingerprint tells two sightings of it apart from the rest, and the
+// masked form is enough for the owner to recognise which key it was.
+model Finding {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  // The watch whose scan found it first. Kept when the watch is deleted, unlinked.
+  watchId     String?  @map("watch_id") @db.Uuid
+  // Which detector matched: "aws-access-key", "private-key", "key-pattern" and so on.
+  detector    String
+  // HMAC-SHA256 of the secret, keyed from ENCRYPTION_KEY, so a database leak can't be
+  // turned back into keys by hashing guesses.
+  fingerprint String
+  // The first and last few characters: "AKIA…7XQ2".
+  masked      String
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  owner     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  watch     Watch?            @relation(fields: [watchId], references: [id], onDelete: SetNull)
+  locations FindingLocation[]
+
+  @@unique([ownerId, fingerprint])
+  @@index([ownerId, firstSeenAt])
+  @@map("findings")
+}
+
+// One place a finding was seen. The same secret in a second file is a second row.
+model FindingLocation {
+  id          BigInt        @id @default(autoincrement())
+  findingId   String        @map("finding_id") @db.Uuid
+  source      FindingSource
+  // A link to the exact line, pinned to the commit so it doesn't drift.
+  url         String
+  repository  String
+  path        String
+  commitSha   String?       @map("commit_sha")
+  line        Int?
+  // The lines around it, with every secret in them masked.
+  context     String
+  committedAt DateTime?     @map("committed_at")
+  seenAt      DateTime      @default(now()) @map("seen_at")
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([findingId, url])
+  @@map("finding_locations")
 }
