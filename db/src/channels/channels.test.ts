@@ -10,17 +10,17 @@ import { signWebhook, webhookBody } from "./webhook.js";
 
 const key = Buffer.alloc(32, 7);
 
-const down: AlertMessage = {
-  kind: "down",
-  title: "Down: Orders <API>",
-  monitor: { id: "m1", name: "Orders <API>", target: "https://api.example.com" },
+const leak: AlertMessage = {
+  kind: "new",
+  title: "Leaked: AWS access key in acme/<api>",
+  finding: { id: "f1", detector: "aws-access-key", label: "AWS access key", masked: "AKIA…MNOP" },
   fields: [
-    ["Cause", "HTTP 503 & worse"],
-    ["Since", "2026-10-27 14:00 UTC"],
+    ["Where", "acme/<api> & co: config/prod.env, line 5"],
+    ["Found", "2026-10-27 14:00 UTC"],
   ],
   note: null,
   link: "https://app.seepwatch.dev/incidents/i1",
-  ackLink: "https://app.seepwatch.dev/ack/i1?by=u1&sig=abc",
+  respondLink: "https://app.seepwatch.dev/respond/i1?by=u1&sig=abc",
   incidentId: "i1",
   at: new Date("2026-10-27T14:00:00Z"),
 };
@@ -36,11 +36,11 @@ function recording(answer = { status: 200, text: "ok" }) {
 }
 
 describe("Slack", () => {
-  it("escapes what users typed, and offers to acknowledge", () => {
-    const payload = JSON.stringify(slackPayload(down));
-    expect(payload).toContain("Orders &lt;API&gt;");
-    expect(payload).toContain("HTTP 503 &amp; worse");
-    expect(payload).toContain("Acknowledge");
+  it("escapes what came from outside, and links to the respond page", () => {
+    const payload = JSON.stringify(slackPayload(leak));
+    expect(payload).toContain("acme/&lt;api&gt;");
+    expect(payload).toContain("&amp; co");
+    expect(payload).toContain("I'm on it / Revoked");
   });
 
   it("posts to the webhook URL", async () => {
@@ -49,9 +49,9 @@ describe("Slack", () => {
       type: "SLACK" as const,
       config: sealConfig({ webhookUrl: "https://hooks.slack.com/services/T/B/x" }, key),
     };
-    await deliver(channel, down, key, { transport });
+    await deliver(channel, leak, key, { transport });
     expect(sent[0]!.url).toBe("https://hooks.slack.com/services/T/B/x");
-    expect(JSON.parse(sent[0]!.body).text).toBe("Down: Orders <API>");
+    expect(JSON.parse(sent[0]!.body).text).toBe("Leaked: AWS access key in acme/<api>");
   });
 
   it("says when the webhook is gone", async () => {
@@ -60,16 +60,16 @@ describe("Slack", () => {
       type: "SLACK" as const,
       config: sealConfig({ webhookUrl: "https://hooks.slack.com/x" }, key),
     };
-    await expect(deliver(channel, down, key, { transport })).rejects.toThrow(/removed/);
+    await expect(deliver(channel, leak, key, { transport })).rejects.toThrow(/removed/);
   });
 });
 
 describe("Telegram", () => {
   it("writes escaped HTML", () => {
-    const text = telegramText(down);
-    expect(text).toContain("<b>Down: Orders &lt;API&gt;</b>");
+    const text = telegramText(leak);
+    expect(text).toContain("<b>Leaked: AWS access key in acme/&lt;api&gt;</b>");
     expect(text).toContain(
-      '<a href="https://app.seepwatch.dev/ack/i1?by=u1&amp;sig=abc">Acknowledge</a>',
+      `<a href="https://app.seepwatch.dev/respond/i1?by=u1&amp;sig=abc">I'm on it / Revoked</a>`,
     );
   });
 
@@ -82,7 +82,7 @@ describe("Telegram", () => {
       type: "TELEGRAM" as const,
       config: sealConfig({ botToken: "123:abc", chatId: "-100" }, key),
     };
-    await expect(deliver(channel, down, key, { transport })).rejects.toThrow(
+    await expect(deliver(channel, leak, key, { transport })).rejects.toThrow(
       /Send the bot a message/,
     );
     expect(sent[0]!.url).toBe("https://api.telegram.org/bot123:abc/sendMessage");
@@ -97,7 +97,7 @@ describe("Telegram", () => {
       type: "TELEGRAM" as const,
       config: sealConfig({ botToken: "123:secret", chatId: "1" }, key),
     };
-    const error = await deliver(channel, down, key, { transport }).catch((e: Error) => e);
+    const error = await deliver(channel, leak, key, { transport }).catch((e: Error) => e);
     expect(error).toBeInstanceOf(DeliveryError);
     expect((error as Error).message).not.toContain("123:secret");
   });
@@ -111,14 +111,15 @@ describe("webhooks", () => {
 
   it("signs the timestamp and the body", async () => {
     const { sent, transport } = recording();
-    await deliver(channel, down, key, { transport });
+    await deliver(channel, leak, key, { transport });
     const { body, headers } = sent[0]!;
     const timestamp = headers["x-seepwatch-timestamp"]!;
     expect(headers["x-seepwatch-signature"]).toBe(signWebhook("whsec", timestamp, body));
-    expect(JSON.parse(body)).toEqual(JSON.parse(JSON.stringify(webhookBody(down))));
+    expect(JSON.parse(body)).toEqual(JSON.parse(JSON.stringify(webhookBody(leak))));
     expect(JSON.parse(body)).toMatchObject({
-      event: "monitor.down",
-      details: { Cause: "HTTP 503 & worse" },
+      event: "leak.new",
+      finding: { masked: "AKIA…MNOP" },
+      details: { Where: "acme/<api> & co: config/prod.env, line 5" },
     });
   });
 
@@ -126,7 +127,7 @@ describe("webhooks", () => {
     const { sent, transport } = recording({ status: 500, text: "" });
     const waits: number[] = [];
     const wait = async (ms: number) => void waits.push(ms);
-    await expect(deliver(channel, down, key, { transport, wait })).rejects.toThrow(
+    await expect(deliver(channel, leak, key, { transport, wait })).rejects.toThrow(
       "Failed after 3 tries: HTTP 500",
     );
     expect(sent).toHaveLength(3);
@@ -136,7 +137,7 @@ describe("webhooks", () => {
   it("stops trying once one gets through", async () => {
     let calls = 0;
     const transport: Transport = async () => ({ status: ++calls < 2 ? 502 : 204, text: "" });
-    await deliver(channel, down, key, { transport, wait: async () => {} });
+    await deliver(channel, leak, key, { transport, wait: async () => {} });
     expect(calls).toBe(2);
   });
 });
