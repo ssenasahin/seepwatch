@@ -111,6 +111,8 @@ function present(w: Loaded) {
         ? { charset: w.keyCharset, minLength: w.keyMinLength, maxLength: w.keyMaxLength }
         : null,
     verification: verification(w),
+    lastScanAt: w.lastScanAt,
+    lastScanError: w.lastScanError,
     escalationPolicy: w.escalationPolicy,
     createdAt: w.createdAt,
   };
