@@ -1,6 +1,6 @@
-// Runs the scanners and the daily re-verification. Incidents and alerts come next;
-// for now a new finding is logged and waits on the findings page.
+// Runs the scanners, the nightly re-verification and the alert rounds of incidents.
 import {
+  ALERTS_QUEUE,
   fingerprintKey,
   githubFileFetcher,
   parseEncryptionKey,
@@ -8,9 +8,11 @@ import {
   redisConnection,
   resolveTxt,
   SCANS_QUEUE,
+  smtpMailer,
   type ScanJob,
 } from "@seepwatch/db";
 import { Queue, Worker } from "bullmq";
+import { dueIncidents, runRound, type AlertDeps } from "./alerts.js";
 import { loadEnv } from "./env.js";
 import { httpGithub } from "./github.js";
 import { reverifyWatches } from "./reverify.js";
@@ -19,6 +21,9 @@ import { dueWatches, runScan, scanJobId, type ScanDeps } from "./scan.js";
 // Clock-driven jobs: finding due watches, and re-verifying proven ones.
 const MAINTENANCE_QUEUE = "maintenance";
 const ENQUEUE_EVERY_MS = 60_000;
+// Alerts are looked for twice a minute, so a new leak is never more than half a
+// minute from its first alert.
+const ALERTS_EVERY_MS = 30_000;
 
 const env = loadEnv();
 const connection = redisConnection(env.REDIS_URL);
@@ -26,14 +31,26 @@ connection.on("error", (err) => console.error("redis:", err.message));
 
 const scans = new Queue<ScanJob>(SCANS_QUEUE, { connection });
 const maintenance = new Queue(MAINTENANCE_QUEUE, { connection });
+const alerts = new Queue(ALERTS_QUEUE, { connection });
+const encryptionKey = parseEncryptionKey(env.ENCRYPTION_KEY);
 
 const scanDeps: ScanDeps = {
   prisma,
   github: httpGithub(env.GITHUB_TOKEN),
-  fingerprintKey: fingerprintKey(parseEncryptionKey(env.ENCRYPTION_KEY)),
-  onNewFindings: async (ids) => {
-    console.log(`${ids.length} new findings`);
-  },
+  fingerprintKey: fingerprintKey(encryptionKey),
+};
+
+const alertDeps: AlertDeps = {
+  prisma,
+  mailer: smtpMailer({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.MAIL_FROM,
+  }),
+  webOrigin: env.WEB_ORIGIN,
+  encryptionKey,
 };
 
 // Every minute: queue the watches whose turn has come.
@@ -47,6 +64,12 @@ await maintenance.upsertJobScheduler(
   "reverify",
   { pattern: "0 3 * * *" },
   { name: "reverify", opts: { removeOnComplete: true, removeOnFail: { count: 30 } } },
+);
+
+await alerts.upsertJobScheduler(
+  "send-due-alerts",
+  { every: ALERTS_EVERY_MS },
+  { name: "send-due-alerts", opts: { removeOnComplete: true, removeOnFail: { count: 30 } } },
 );
 
 const scanWorker = new Worker<ScanJob>(
@@ -83,7 +106,21 @@ const maintenanceWorker = new Worker(
   { connection },
 );
 
-for (const worker of [scanWorker, maintenanceWorker]) {
+// One run at a time: each round is claimed in the database, but sending them in
+// order keeps the timeline readable.
+const alertWorker = new Worker(
+  ALERTS_QUEUE,
+  async () => {
+    let sent = 0;
+    for (const id of await dueIncidents(prisma)) {
+      if (await runRound(alertDeps, id)) sent++;
+    }
+    if (sent > 0) console.log(`sent ${sent} alert rounds`);
+  },
+  { connection },
+);
+
+for (const worker of [scanWorker, maintenanceWorker, alertWorker]) {
   worker.on("failed", (job, err) => {
     console.error(`${worker.name} job ${job?.id ?? "?"} failed:`, err.message);
   });
@@ -96,8 +133,8 @@ console.log(`seepwatch worker running ${env.SCAN_CONCURRENCY} scans at a time`);
 
 // Let running scans finish, then close Redis and database connections.
 async function shutdown() {
-  await Promise.all([scanWorker.close(), maintenanceWorker.close()]);
-  await Promise.all([scans.close(), maintenance.close(), prisma.$disconnect()]);
+  await Promise.all([scanWorker.close(), maintenanceWorker.close(), alertWorker.close()]);
+  await Promise.all([scans.close(), maintenance.close(), alerts.close(), prisma.$disconnect()]);
   await connection.quit();
   process.exit(0);
 }
