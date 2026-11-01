@@ -13,18 +13,39 @@ accounts, team, alert channels, escalation policies, signed links and admin pane
 ## Status
 
 The foundation runs: sign-up and sign-in with two-factor, teams and invites, Slack, Telegram and
-webhook channels, escalation policies, API keys and the admin panel with its audit log. The scanners
-don't exist yet, so nothing is watched and no incident is ever opened.
+webhook channels, escalation policies, API keys and the admin panel with its audit log. You can add
+watches and prove they're yours. The scanners don't exist yet, so nothing is searched and no incident
+is ever opened.
 
 What comes next, in order:
 
-1. Watches (domains, addresses, organizations, key patterns) and domain verification by a DNS TXT
-   record.
-2. Detectors, the GitHub source, findings and their fingerprints.
-3. The incident state machine, escalation that repeats until revoked, and signed links with two
+1. Detectors, the GitHub source, findings and their fingerprints.
+2. The incident state machine, escalation that repeats until revoked, and signed links with two
    actions: "I'm on it" and "revoked".
-4. Gist and paste site sources.
-5. The pages for findings, incidents and watches.
+3. Gist and paste site sources.
+4. The pages for findings and incidents.
+
+## Watches
+
+A watch is one thing to look for. There are four kinds:
+
+| Kind                | Example           | How it's proven yours                                               |
+| ------------------- | ----------------- | ------------------------------------------------------------------- |
+| Domain              | `example.com`     | A TXT record at `_seepwatch.example.com` holding the watch's token  |
+| Address             | `ops@example.com` | It must be on a verified domain or one of its subdomains            |
+| GitHub organization | `acme`            | A file `seepwatch-verify.txt` in `acme/.github` holding the token   |
+| Key pattern         | `acme_live_`      | No proof needed: it's only matched in content that is already yours |
+
+The token sits on a name of its own, so it doesn't crowd the domain's SPF and other records, and only
+an organization's members can write to its `.github` repository. A token belongs to one account's
+watch, so publishing yours proves nothing for anyone else who added the same domain.
+
+A key pattern is a prefix, a character set and a length range, never a regular expression you type.
+Seepwatch builds the expression itself, so no pattern can make the scanner backtrack for ever, and
+it won't match the prefix inside a longer word.
+
+Each watch can have its own escalation policy; without one, a leak alerts you and every channel at
+once. Deleting a domain deletes the addresses on it.
 
 ## Design decisions
 
@@ -64,6 +85,7 @@ api/                  Express API
   src/channels/       Slack, Telegram and webhook channels
   src/escalation/     escalation policies
   src/team/           team members and invites
+  src/watches/        watches, their values and verification
   src/api-keys/       API keys
   src/admin/          users, plans, system health and the audit log
 worker/               BullMQ worker, where the scanners will run
@@ -71,6 +93,8 @@ db/                   Prisma schema, migrations and the code api and worker shar
   src/network.ts      the SSRF guard for webhook deliveries
   src/crypto.ts       AES-256-GCM for secret columns
   src/escalation.ts   escalation steps and signed links
+  src/watches.ts      key patterns as safe regular expressions
+  src/verification.ts DNS TXT and GitHub file verification
 web/                  React dashboard
 deployments/          production compose file and Caddy config
 ```
