@@ -13,9 +13,13 @@ export function redisConnection(url: string, { failFast = false } = {}): Redis {
   );
 }
 
-// One watch to scan, or (with no watch) the job that finds which watches are due.
+// One watch to scan.
 export const SCANS_QUEUE = "scans";
 
 export interface ScanJob {
   watchId: string;
 }
+
+// Alert rounds that are due. A repeating job looks for them every half minute; the
+// API never adds to it, it only moves an incident's next_alert_at.
+export const ALERTS_QUEUE = "alerts";

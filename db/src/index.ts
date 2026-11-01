@@ -34,20 +34,28 @@ export {
   type ResolveHost,
 } from "./network.js";
 export {
-  ackLink,
-  ESCALATIONS_QUEUE,
-  escalationJobId,
   MAX_ESCALATION_STEPS,
-  queueEscalationCanceller,
   readSteps,
-  signAck,
-  verifyAck,
-  type EscalationCanceller,
-  type EscalationJob,
+  respondLink,
+  signRespond,
+  verifyRespond,
   type EscalationStep,
   type EscalationTarget,
 } from "./escalation.js";
-export { redisConnection, SCANS_QUEUE, type ScanJob } from "./queues.js";
+export {
+  ACK_REMINDER_MS,
+  CLOSED,
+  isClosed,
+  needsReason,
+  nextStatus,
+  OPEN_REMINDER_MS,
+  planRound,
+  type Action,
+  type Audience,
+  type Round,
+  type RoundKind,
+} from "./incidents.js";
+export { ALERTS_QUEUE, redisConnection, SCANS_QUEUE, type ScanJob } from "./queues.js";
 export {
   detect,
   DETECTORS,
