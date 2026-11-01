@@ -2,9 +2,11 @@ import { escapeHtml } from "../mailer.js";
 import { DeliveryError, type AlertMessage, type TelegramConfig, type Transport } from "./types.js";
 
 const DOT: Record<AlertMessage["kind"], string> = {
-  down: "🔴",
-  up: "🟢",
-  degraded: "🟡",
+  new: "🔴",
+  escalated: "🔴",
+  unacknowledged: "🔴",
+  acknowledged: "🟡",
+  closed: "🟢",
   test: "👋",
 };
 
@@ -17,7 +19,9 @@ export function telegramText(message: AlertMessage): string {
     ...(message.note ? ["", `<i>${escapeHtml(message.note)}</i>`] : []),
     "",
     `<a href="${escapeHtml(message.link)}">Open in Seepwatch</a>`,
-    ...(message.ackLink ? [`<a href="${escapeHtml(message.ackLink)}">Acknowledge</a>`] : []),
+    ...(message.respondLink
+      ? [`<a href="${escapeHtml(message.respondLink)}">I'm on it / Revoked</a>`]
+      : []),
   ];
   return lines.join("\n");
 }

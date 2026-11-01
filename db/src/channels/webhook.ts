@@ -11,13 +11,16 @@ const FIRST_WAIT_MS = 1_000;
 // The body a receiver gets: the event and the facts, with no presentation.
 export function webhookBody(message: AlertMessage) {
   return {
-    event: message.kind === "test" ? "test" : `monitor.${message.kind}`,
+    // "leak.new", "leak.escalated", "leak.unacknowledged", "leak.acknowledged",
+    // "leak.closed", or "test".
+    event: message.kind === "test" ? "test" : `leak.${message.kind}`,
     title: message.title,
-    monitor: message.monitor,
+    // Masked: the secret itself never leaves Seepwatch, because Seepwatch never has it.
+    finding: message.finding,
     incidentId: message.incidentId,
     details: Object.fromEntries(message.fields),
     link: message.link,
-    acknowledgeLink: message.ackLink,
+    respondLink: message.respondLink,
     sentAt: message.at.toISOString(),
   };
 }

@@ -1,19 +1,22 @@
 import type { ChannelType } from "../generated/prisma/client.js";
+import type { RoundKind } from "../incidents.js";
 
 // What every channel is told, whatever it looks like once it arrives.
 export interface AlertMessage {
-  kind: "down" | "up" | "degraded" | "test";
-  // One line that works as a push notification on its own: "Down: Orders API".
+  // Which round of an incident this is, or a test of the channel.
+  kind: RoundKind | "test";
+  // One line that works as a push notification on its own: "Leaked: AWS access key".
   title: string;
-  monitor: { id: string; name: string; target: string } | null;
-  // Label and value pairs: the cause, since when, how long.
+  // The secret, masked, and what kind it is. Null for a test.
+  finding: { id: string; detector: string; label: string; masked: string } | null;
+  // Label and value pairs: where it was found, since when, who's on it.
   fields: [string, string][];
   // A sentence of context under the fields, if there's something to add.
   note: string | null;
-  // The monitor or incident in the dashboard.
+  // The incident in the dashboard.
   link: string;
-  // A signed link that acknowledges the incident, for alerts that escalate.
-  ackLink: string | null;
+  // A signed link to a page with "I'm on it" and "Revoked", while the leak is open.
+  respondLink: string | null;
   incidentId: string | null;
   at: Date;
 }

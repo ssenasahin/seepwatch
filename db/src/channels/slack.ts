@@ -1,9 +1,11 @@
 import { DeliveryError, type AlertMessage, type SlackConfig, type Transport } from "./types.js";
 
 const EMOJI: Record<AlertMessage["kind"], string> = {
-  down: ":red_circle:",
-  up: ":large_green_circle:",
-  degraded: ":large_yellow_circle:",
+  new: ":red_circle:",
+  escalated: ":red_circle:",
+  unacknowledged: ":red_circle:",
+  acknowledged: ":large_yellow_circle:",
+  closed: ":large_green_circle:",
   test: ":wave:",
 };
 
@@ -16,13 +18,13 @@ export function escapeSlack(text: string): string {
 export function slackPayload(message: AlertMessage) {
   const buttons = [
     { type: "button", text: { type: "plain_text", text: "Open in Seepwatch" }, url: message.link },
-    ...(message.ackLink
+    ...(message.respondLink
       ? [
           {
             type: "button",
             style: "primary",
-            text: { type: "plain_text", text: "Acknowledge" },
-            url: message.ackLink,
+            text: { type: "plain_text", text: "I'm on it / Revoked" },
+            url: message.respondLink,
           },
         ]
       : []),
