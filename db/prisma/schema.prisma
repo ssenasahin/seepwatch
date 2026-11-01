@@ -24,6 +24,24 @@ enum TeamRole {
   MEMBER
 }
 
+// What a watch looks for. Domains and organizations must be proven to be the owner's
+// before any scan uses them; addresses hang off a verified domain; key patterns are
+// only ever matched inside content that is already the owner's.
+enum WatchKind {
+  DOMAIN
+  EMAIL
+  GITHUB_ORG
+  KEY_PATTERN
+}
+
+// The characters a custom key may use after its prefix. A fixed set rather than a
+// user's regular expression, so no pattern can make the scanner backtrack for ever.
+enum KeyCharset {
+  ALNUM
+  HEX
+  BASE64URL
+}
+
 // Email isn't a channel: alerts are emailed to the account's owner and to team
 // members who accepted an invite, never to an address someone merely typed in.
 enum ChannelType {
@@ -55,6 +73,7 @@ model User {
   plan Plan? @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   channels    NotificationChannel[]
+  watches     Watch[]
   ownedTeam   Team?
   apiKeys     ApiKey[]
   memberships TeamMember[]
@@ -68,13 +87,13 @@ model User {
 
 // What an account may use. Exactly one plan is the default, for everyone without one.
 model Plan {
-  id             String   @id @default(uuid()) @db.Uuid
-  name           String   @unique
-  maxWatches     Int      @map("max_watches")
-  maxChannels    Int      @map("max_channels")
-  maxApiKeys     Int      @map("max_api_keys")
-  isDefault      Boolean  @default(false) @map("is_default")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  maxWatches  Int      @map("max_watches")
+  maxChannels Int      @map("max_channels")
+  maxApiKeys  Int      @map("max_api_keys")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   users User[]
 
@@ -224,7 +243,8 @@ model EscalationPolicy {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  watches Watch[]
 
   @@index([teamId])
   @@map("escalation_policies")
@@ -248,4 +268,43 @@ model NotificationChannel {
 
   @@index([ownerId])
   @@map("notification_channels")
+}
+
+// Something of the owner's to look for in public code and pastes.
+model Watch {
+  id                 String      @id @default(uuid()) @db.Uuid
+  ownerId            String      @map("owner_id") @db.Uuid
+  kind               WatchKind
+  // Lowercased: "example.com", "ops@example.com", "acme". For a key pattern, its prefix.
+  value              String
+  // The owner's own name for it, shown instead of the value where there's room.
+  label              String?
+  // An address's domain watch. Deleting the domain deletes its addresses.
+  domainWatchId      String?     @map("domain_watch_id") @db.Uuid
+  // A key pattern's shape after the prefix: which characters, and how many.
+  keyCharset         KeyCharset? @map("key_charset")
+  keyMinLength       Int?        @map("key_min_length")
+  keyMaxLength       Int?        @map("key_max_length")
+  // Domains and organizations: the token to publish, and when it was last found.
+  // Scans skip a watch until verifiedAt is set.
+  verifyToken        String?     @map("verify_token")
+  verifiedAt         DateTime?   @map("verified_at")
+  lastVerifyAt       DateTime?   @map("last_verify_at")
+  // Why the last attempt failed, in words for the owner; null after a success.
+  lastVerifyError    String?     @map("last_verify_error")
+  // A paused watch keeps its verification but isn't scanned.
+  enabled            Boolean     @default(true)
+  // Who hears about a leak it finds. Null: the owner and every channel, at once.
+  escalationPolicyId String?     @map("escalation_policy_id") @db.Uuid
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  domainWatch      Watch?            @relation("DomainAddresses", fields: [domainWatchId], references: [id], onDelete: Cascade)
+  addresses        Watch[]           @relation("DomainAddresses")
+  escalationPolicy EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id], onDelete: SetNull)
+
+  @@unique([ownerId, kind, value])
+  @@index([domainWatchId])
+  @@map("watches")
 }
