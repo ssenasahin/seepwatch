@@ -150,6 +150,7 @@ export async function runRound(deps: AlertDeps, incidentId: string, now = new Da
     },
     where: location
       ? {
+          source: location.source,
           repository: location.repository,
           path: location.path,
           line: location.line,

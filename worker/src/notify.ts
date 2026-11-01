@@ -2,6 +2,7 @@ import {
   emailLayout,
   escapeHtml,
   type AlertMessage,
+  type FindingSource,
   type IncidentStatus,
   type Mail,
   type RoundKind,
@@ -24,13 +25,33 @@ export interface IncidentFacts {
     masked: string;
   };
   // The most recent place it was seen, and how many there are.
-  where: { repository: string; path: string; line: number | null; url: string } | null;
+  where: {
+    source: FindingSource;
+    repository: string;
+    path: string;
+    line: number | null;
+    url: string;
+  } | null;
   places: number;
   // The domain, address or organization whose scan found it.
   watch: string | null;
 }
 
 export const formatUtc = (date: Date) => date.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+
+// Where a secret was found, in words: a repository, a gist, a paste.
+function placeOf(where: NonNullable<IncidentFacts["where"]>): string {
+  switch (where.source) {
+    case "GIST": {
+      const owner = where.repository.split("/")[0];
+      return owner === "anonymous" ? "an anonymous gist" : `a gist by ${owner}`;
+    }
+    case "PASTEBIN":
+      return `Pastebin paste ${where.repository}`;
+    default:
+      return where.repository;
+  }
+}
 
 const ENDINGS: Partial<Record<IncidentStatus, string>> = {
   REVOKED: "Revoked",
@@ -39,7 +60,7 @@ const ENDINGS: Partial<Record<IncidentStatus, string>> = {
 };
 
 function subject(kind: RoundKind, facts: IncidentFacts): string {
-  const what = facts.finding.label + (facts.where ? ` in ${facts.where.repository}` : "");
+  const what = facts.finding.label + (facts.where ? ` in ${placeOf(facts.where)}` : "");
   switch (kind) {
     case "new":
       return `Leaked: ${what}`;
@@ -73,7 +94,7 @@ function fields(kind: RoundKind, facts: IncidentFacts): [string, string][] {
   const rows: [string, string][] = [["Secret", facts.finding.masked]];
   if (facts.where) {
     const line = facts.where.line ? `, line ${facts.where.line}` : "";
-    rows.push(["Where", `${facts.where.repository}: ${facts.where.path}${line}`]);
+    rows.push(["Where", `${placeOf(facts.where)}: ${facts.where.path}${line}`]);
   }
   if (facts.places > 1) rows.push(["Places", `${facts.places} in all`]);
   if (facts.watch) rows.push(["Watch", facts.watch]);
@@ -124,7 +145,7 @@ export function renderAlert(
       rows.map(([label, value]) => row(escapeHtml(label), escapeHtml(value))).join("") +
       `</table>` +
       (facts.where
-        ? `<p style="margin:16px 0 0;font-size:14px"><a href="${escapeHtml(facts.where.url)}" style="color:#f5a524">See it on GitHub</a></p>`
+        ? `<p style="margin:16px 0 0;font-size:14px"><a href="${escapeHtml(facts.where.url)}" style="color:#f5a524">See where it was found</a></p>`
         : "") +
       (note
         ? `<p style="margin:20px 0 0;color:#8b939d;font-size:14px">${escapeHtml(note)}</p>`
