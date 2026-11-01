@@ -15,6 +15,13 @@ const schema = z.object({
   ENCRYPTION_KEY: z
     .string()
     .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded"),
+  // Optional, but without it GitHub allows 60 requests an hour and code search none.
+  GITHUB_TOKEN: z
+    .string()
+    .optional()
+    .transform((v) => v || undefined),
+  // Watches scanned at once. GitHub's limits, not the CPU, are what this protects.
+  SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
 });
 
 export type WorkerEnv = z.infer<typeof schema>;
