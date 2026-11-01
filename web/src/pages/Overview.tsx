@@ -2,6 +2,7 @@ import { ExternalLink, Radar } from "lucide-react";
 import { Link } from "react-router";
 import { useChannels } from "../api/alerts";
 import { useFindings, type Finding } from "../api/findings";
+import { useActiveIncidents } from "../api/incidents";
 import { isVerified, useWatches } from "../api/watches";
 import { Alert, EmptyState, SkeletonRows } from "../components";
 import { timeAgo } from "../lib/format";
@@ -15,6 +16,8 @@ export function OverviewPage() {
   const watches = useWatches();
   const channels = useChannels();
   const findings = useFindings();
+  const incidents = useActiveIncidents();
+  const unanswered = incidents.data?.filter((i) => i.status === "OPEN").length ?? 0;
 
   return (
     <>
@@ -49,6 +52,13 @@ export function OverviewPage() {
       {watches.data && watches.data.length > 0 && (
         <div className="stack">
           <div className="tiles">
+            <div className="tile">
+              <div className="tile-label">Active leaks</div>
+              <div className="tile-value">{incidents.data?.length ?? "—"}</div>
+              <div className="tile-note">
+                {unanswered > 0 ? `${unanswered} with nobody on it` : "Until each is revoked"}
+              </div>
+            </div>
             <div className="tile">
               <div className="tile-label">Watched</div>
               <div className="tile-value">
