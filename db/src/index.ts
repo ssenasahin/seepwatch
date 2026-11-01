@@ -55,7 +55,7 @@ export {
   type Round,
   type RoundKind,
 } from "./incidents.js";
-export { ALERTS_QUEUE, redisConnection, SCANS_QUEUE, type ScanJob } from "./queues.js";
+export { ALERTS_QUEUE, FEEDS_QUEUE, redisConnection, SCANS_QUEUE, type ScanJob } from "./queues.js";
 export {
   detect,
   DETECTORS,

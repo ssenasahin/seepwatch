@@ -23,3 +23,7 @@ export interface ScanJob {
 // Alert rounds that are due. A repeating job looks for them every half minute; the
 // API never adds to it, it only moves an incident's next_alert_at.
 export const ALERTS_QUEUE = "alerts";
+
+// Reading the public feeds (gists, and pastes when it's set up). Each job reads one,
+// named by its source.
+export const FEEDS_QUEUE = "feeds";
