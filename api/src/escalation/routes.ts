@@ -71,16 +71,25 @@ export function escalationRouter(prisma: PrismaClient, authenticate: RequestHand
     return policy;
   }
 
+  const usedBy = {
+    watches: {
+      select: { id: true, kind: true, value: true, label: true },
+      orderBy: { value: "asc" },
+    },
+  } as const;
+
   const present = (policy: {
     id: string;
     name: string;
     steps: unknown;
     createdAt: Date;
     updatedAt: Date;
+    watches?: { id: string; kind: string; value: string; label: string | null }[];
   }) => ({
     id: policy.id,
     name: policy.name,
     steps: readSteps(policy.steps),
+    watches: policy.watches ?? [],
     createdAt: policy.createdAt,
     updatedAt: policy.updatedAt,
   });
@@ -91,6 +100,7 @@ export function escalationRouter(prisma: PrismaClient, authenticate: RequestHand
     const policies = await prisma.escalationPolicy.findMany({
       where: { teamId: team.id },
       orderBy: { createdAt: "asc" },
+      include: usedBy,
     });
     res.json({ policies: policies.map(present) });
   });
@@ -114,10 +124,12 @@ export function escalationRouter(prisma: PrismaClient, authenticate: RequestHand
     const policy = await prisma.escalationPolicy.update({
       where: { id },
       data: input,
+      include: usedBy,
     });
     res.json({ policy: present(policy) });
   });
 
+  // Its watches fall back to alerting the owner and every channel.
   router.delete("/:id", async (req, res) => {
     const { userId } = authOf(req);
     const { id } = validate(idParams, req.params);
