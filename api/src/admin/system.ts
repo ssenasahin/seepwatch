@@ -57,19 +57,22 @@ export function systemRouter(prisma: PrismaClient, probe: SystemProbe) {
   const router = Router();
 
   router.get("/health", async (_req, res) => {
-    const [queues, redisBytes, [{ bytes }], tables, users, liveSessions] = await Promise.all([
-      // A probe that fails (Redis down) shouldn't hide the rest of the page.
-      probe.queues().catch(() => null),
-      probe.redisMemoryBytes().catch(() => null),
-      prisma.$queryRaw<[{ bytes: bigint }]>`SELECT pg_database_size(current_database()) AS bytes`,
-      prisma.$queryRaw<{ name: string; bytes: bigint }[]>`
+    const [queues, redisBytes, [{ bytes }], tables, users, liveSessions, feeds] = await Promise.all(
+      [
+        // A probe that fails (Redis down) shouldn't hide the rest of the page.
+        probe.queues().catch(() => null),
+        probe.redisMemoryBytes().catch(() => null),
+        prisma.$queryRaw<[{ bytes: bigint }]>`SELECT pg_database_size(current_database()) AS bytes`,
+        prisma.$queryRaw<{ name: string; bytes: bigint }[]>`
         SELECT relname AS name, pg_total_relation_size(relid) AS bytes
         FROM pg_catalog.pg_statio_user_tables
         ORDER BY bytes DESC
         LIMIT 6`,
-      prisma.user.count(),
-      prisma.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
-    ]);
+        prisma.user.count(),
+        prisma.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
+        prisma.feedState.findMany({ orderBy: { source: "asc" } }),
+      ],
+    );
 
     res.json({
       generatedAt: new Date(),
@@ -83,6 +86,14 @@ export function systemRouter(prisma: PrismaClient, probe: SystemProbe) {
       redis: { bytes: redisBytes },
       users,
       liveSessions,
+      // How far each public feed has been read, and why the last run stopped short.
+      feeds: feeds.map((f) => ({
+        source: f.source,
+        cursor: f.cursor,
+        lastRunAt: f.lastRunAt,
+        lastRead: f.lastRead,
+        lastError: f.lastError,
+      })),
     });
   });
 
