@@ -52,6 +52,29 @@ enum FindingSource {
 
 // Email isn't a channel: alerts are emailed to the account's owner and to team
 // members who accepted an invite, never to an address someone merely typed in.
+// Where a leak stands. Acknowledging doesn't end it: only the last three do, and of
+// those only REVOKED says the secret is harmless now.
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  REVOKED
+  FALSE_POSITIVE
+  RISK_ACCEPTED
+}
+
+enum IncidentEventType {
+  OPENED
+  NOTIFIED
+  NOT_DELIVERED
+  ESCALATED
+  REMINDED
+  ACKNOWLEDGED
+  SEEN_AGAIN
+  REVOKED
+  FALSE_POSITIVE
+  RISK_ACCEPTED
+}
+
 enum ChannelType {
   SLACK
   TELEGRAM
@@ -83,6 +106,7 @@ model User {
   channels    NotificationChannel[]
   watches     Watch[]
   findings    Finding[]
+  incidents   Incident[]
   ownedTeam   Team?
   apiKeys     ApiKey[]
   memberships TeamMember[]
@@ -348,6 +372,7 @@ model Finding {
   owner     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   watch     Watch?            @relation(fields: [watchId], references: [id], onDelete: SetNull)
   locations FindingLocation[]
+  incident  Incident?
 
   @@unique([ownerId, fingerprint])
   @@index([ownerId, firstSeenAt])
@@ -374,4 +399,47 @@ model FindingLocation {
 
   @@unique([findingId, url])
   @@map("finding_locations")
+}
+
+// One per finding: the leak, from the first alert until someone says it's dealt with.
+model Incident {
+  id             String         @id @default(uuid()) @db.Uuid
+  ownerId        String         @map("owner_id") @db.Uuid
+  findingId      String         @unique @map("finding_id") @db.Uuid
+  status         IncidentStatus @default(OPEN)
+  openedAt       DateTime       @default(now()) @map("opened_at")
+  acknowledgedAt DateTime?      @map("acknowledged_at")
+  // Who, in words: "ada@example.com" or "someone in \"#security\"".
+  acknowledgedBy String?        @map("acknowledged_by")
+  closedAt       DateTime?      @map("closed_at")
+  closedBy       String?        @map("closed_by")
+  // Why it was closed without revoking: required for a false positive or an accepted risk.
+  closeReason    String?        @map("close_reason")
+  // Alert rounds sent so far. With a policy, round n alerts step n; once the steps run
+  // out, every round is a reminder to everyone alerted so far.
+  round          Int            @default(0)
+  // When the next round is due. Null once the incident is closed.
+  nextAlertAt    DateTime?      @map("next_alert_at")
+
+  owner   User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  finding Finding         @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  events  IncidentEvent[]
+
+  @@index([nextAlertAt])
+  @@index([ownerId, openedAt])
+  @@map("incidents")
+}
+
+model IncidentEvent {
+  id         BigInt            @id @default(autoincrement())
+  incidentId String            @map("incident_id") @db.Uuid
+  type       IncidentEventType
+  at         DateTime          @default(now())
+  // What the timeline says: who was told and how, who acted, and why.
+  detail     String?
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, at])
+  @@map("incident_events")
 }
