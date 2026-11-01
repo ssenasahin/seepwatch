@@ -48,6 +48,29 @@ export {
   type EscalationTarget,
 } from "./escalation.js";
 export { redisConnection } from "./queues.js";
+export {
+  KEY_LENGTH_MAX,
+  KEY_LENGTH_MIN,
+  KEY_PREFIX_MAX,
+  KEY_PREFIX_MIN,
+  keyPatternProblems,
+  keyPatternRegExp,
+  keyPatternSource,
+  type KeyPattern,
+} from "./watches.js";
+export {
+  dnsRecordName,
+  GITHUB_FILE,
+  GITHUB_REPO,
+  githubFileFetcher,
+  newVerifyToken,
+  resolveTxt,
+  verifyDomain,
+  verifyGithubOrg,
+  type FetchGithubFile,
+  type ResolveTxt,
+  type VerifyResult,
+} from "./verification.js";
 
 // Each client holds its own pool of connections through node-postgres. Prisma 6
 // gave up on a connection after 5 seconds; pg would wait forever, so keep that limit.
