@@ -205,11 +205,11 @@ export function channelRouter({
     const message: AlertMessage = {
       kind: "test",
       title: "Test alert from Seepwatch",
-      monitor: null,
+      finding: null,
       fields: [["Channel", channel.name]],
       note: "If you can read this, Seepwatch's alerts will reach you here.",
       link: `${webOrigin}/channels`,
-      ackLink: null,
+      respondLink: null,
       incidentId: null,
       at: new Date(),
     };
