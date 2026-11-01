@@ -22,6 +22,7 @@ import type { Env } from "./env.js";
 import { escalationRouter } from "./escalation/routes.js";
 import { findingRouter } from "./findings/routes.js";
 import { healthRouter } from "./health.js";
+import { incidentRouter, respondRouter } from "./incidents/routes.js";
 import { errorHandler } from "./http.js";
 import { rejectCrossSiteRequests } from "./origin.js";
 import { teamRouter } from "./team/routes.js";
@@ -94,6 +95,9 @@ export function createApp({
   );
   app.use("/api/watches", watchRouter({ prisma, authenticate, resolveTxt, fetchGithubFile }));
   app.use("/api/findings", findingRouter(prisma, authenticate));
+  app.use("/api/incidents", incidentRouter(prisma, authenticate));
+  // Public: an alert's signed link is the only proof needed.
+  app.use("/api/respond", respondRouter(prisma, encryptionKey));
   app.use("/api/team", teamRouter({ prisma, mailer, authenticate, webOrigin: env.WEB_ORIGIN }));
   app.use("/api/escalation-policies", escalationRouter(prisma, authenticate));
   app.use("/api/api-keys", apiKeyRouter(prisma, authenticate));
