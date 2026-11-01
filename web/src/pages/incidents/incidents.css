@@ -1,0 +1,14 @@
+/* The respond page: the masked secret, then the two buttons stacked. */
+
+.respond-secret {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  word-break: break-all;
+}
+
+.respond-actions {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}

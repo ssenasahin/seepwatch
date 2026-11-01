@@ -18,6 +18,10 @@ const styleGuide = async () => ({
   Component: (await import("./pages/StyleGuide")).StyleGuidePage,
 });
 const brand = async () => ({ Component: (await import("./pages/Brand")).BrandPage });
+// Opened from an alert, often on a phone, by someone who may not have an account.
+const respond = async () => ({
+  Component: (await import("./pages/incidents/Respond")).RespondPage,
+});
 const watches = async () => ({
   Component: (await import("./pages/watches/Watches")).WatchesPage,
 });
@@ -64,6 +68,7 @@ const router = createBrowserRouter([
         handle: title("Reset password"),
       },
       { path: "/reset-password", element: <ResetPasswordPage />, handle: title("New password") },
+      { path: "/respond/:id", lazy: respond, handle: title("Leak") },
     ],
   },
   {
