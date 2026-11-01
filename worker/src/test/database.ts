@@ -7,7 +7,8 @@ export const TEST_DATABASE_URL =
 export const prisma: PrismaClient = createPrisma(TEST_DATABASE_URL);
 
 export async function resetDatabase() {
-  await prisma.$executeRawUnsafe("TRUNCATE TABLE users CASCADE");
+  // Everything hangs off users except the feeds' progress, which belongs to no one.
+  await prisma.$executeRawUnsafe("TRUNCATE TABLE users, feed_states CASCADE");
 }
 
 export async function makeOwner(email = "ada@example.com") {

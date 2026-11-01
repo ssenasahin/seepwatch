@@ -1,4 +1,4 @@
-import type { CodeResult, Commit, CommitFile, GithubApi, Repo } from "../github.js";
+import type { CodeResult, Commit, CommitFile, Gist, GithubApi, Repo } from "../github.js";
 
 // GitHub as the tests describe it. Each call is counted, so a test can check how much
 // of the rate limit a scan would have spent.
@@ -8,6 +8,9 @@ export class FakeGithub implements GithubApi {
   files = new Map<string, CommitFile[]>();
   search: CodeResult[] = [];
   texts = new Map<string, string>();
+  gists: Gist[] = [];
+  // Gist file contents by raw URL.
+  gistTexts = new Map<string, string>();
   calls = 0;
   // Throws this from the given call number on, as GitHub does when the limit runs out.
   failFrom: { call: number; error: Error } | null = null;
@@ -43,6 +46,19 @@ export class FakeGithub implements GithubApi {
   async fileText(repo: string, path: string, ref: string) {
     this.count();
     return this.texts.get(`${repo}/${path}@${ref}`) ?? null;
+  }
+
+  async publicGists(since: Date, limit: number) {
+    this.count();
+    return this.gists
+      .filter((g) => g.updatedAt >= since)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, limit);
+  }
+
+  // Raw files aren't API calls, so they don't count.
+  async gistFileText(rawUrl: string) {
+    return this.gistTexts.get(rawUrl) ?? null;
   }
 }
 
