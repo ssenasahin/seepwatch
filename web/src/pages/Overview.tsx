@@ -1,14 +1,20 @@
-import { Radar } from "lucide-react";
+import { ExternalLink, Radar } from "lucide-react";
 import { Link } from "react-router";
 import { useChannels } from "../api/alerts";
+import { useFindings, type Finding } from "../api/findings";
 import { isVerified, useWatches } from "../api/watches";
 import { Alert, EmptyState, SkeletonRows } from "../components";
+import { timeAgo } from "../lib/format";
+import "./alerts/alerts.css";
 
-// The home page until findings exist: what is watched, what still needs proof, and
-// whether a leak would reach anyone.
+const RECENT = 5;
+
+// The home page: what is watched, what still needs proof, whether a leak would reach
+// anyone, and the latest leaks found.
 export function OverviewPage() {
   const watches = useWatches();
   const channels = useChannels();
+  const findings = useFindings();
 
   return (
     <>
@@ -67,12 +73,54 @@ export function OverviewPage() {
               </div>
             </div>
           </div>
-          <Alert tone="info">
-            The scanners are still being built, so nothing has been searched yet. Findings will show
-            up here.
-          </Alert>
+          <RecentFindings findings={findings.data} failed={findings.isError} />
         </div>
       )}
     </>
+  );
+}
+
+function RecentFindings({ findings, failed }: { findings?: Finding[]; failed: boolean }) {
+  if (failed) return <Alert tone="error">Couldn't load findings.</Alert>;
+  if (!findings) return null;
+  if (findings.length === 0) {
+    return (
+      <Alert tone="info">
+        No leaks found so far. Organizations are scanned every 15 minutes and domains every 6 hours,
+        once they're verified.
+      </Alert>
+    );
+  }
+  return (
+    <section className="card">
+      <div className="card-body">
+        <h2 className="section-title">Latest findings</h2>
+      </div>
+      <ul className="item-list">
+        {findings.slice(0, RECENT).map((f) => {
+          const where = f.locations[0];
+          return (
+            <li key={f.id} className="item-row">
+              <div className="item-main">
+                <div className="item-title">
+                  <span>{f.detectorLabel}</span>
+                  <code className="mono">{f.masked}</code>
+                </div>
+                <div className="item-meta">
+                  {where && (
+                    <a href={where.url} target="_blank" rel="noreferrer">
+                      {where.repository}/{where.path}
+                      {where.line ? `:${where.line}` : ""} <ExternalLink size={12} aria-hidden />
+                    </a>
+                  )}
+                  {f.locationCount > 1 && <span>and {f.locationCount - 1} more places</span>}
+                  <span>found {timeAgo(f.firstSeenAt)}</span>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
