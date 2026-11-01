@@ -27,6 +27,8 @@ export interface Sighting {
   lines: string[];
   // Each line's number in the file, when the lines aren't the whole file (a patch).
   numbers?: number[];
+  // A link to a line, for sources that aren't files in a repository (gists, pastes).
+  link?: (line: number) => string;
 }
 
 const isDuplicate = (err: unknown) =>
@@ -86,7 +88,9 @@ export async function recordHits(
       data: {
         findingId,
         source: sighting.source,
-        url: `https://github.com/${sighting.repository}/blob/${sighting.ref}/${encodePath(sighting.path)}#L${line}`,
+        url:
+          sighting.link?.(line) ??
+          `https://github.com/${sighting.repository}/blob/${sighting.ref}/${encodePath(sighting.path)}#L${line}`,
         repository: sighting.repository,
         path: sighting.path,
         commitSha: /^[0-9a-f]{40}$/.test(sighting.ref) ? sighting.ref : null,
