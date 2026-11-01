@@ -1,4 +1,5 @@
-import { prisma, redisConnection, smtpMailer } from "@seepwatch/db";
+import { prisma, redisConnection, SCANS_QUEUE, smtpMailer } from "@seepwatch/db";
+import { Queue } from "bullmq";
 import { queueProbe } from "./admin/system.js";
 import { createApp } from "./app.js";
 import { loadEnv } from "./env.js";
@@ -14,12 +15,14 @@ const mailer = smtpMailer({
 const redis = redisConnection(env.REDIS_URL, { failFast: true });
 // Without a listener, a lost Redis connection would crash the process.
 redis.on("error", (err) => console.error("redis:", err.message));
+// Only read here, for the admin panel's queue figures; the worker fills them.
+const scans = new Queue(SCANS_QUEUE, { connection: redis });
 const app = createApp({
   env,
   prisma,
   mailer,
-  // The scan and notification queues join this list as the scanners arrive.
-  system: queueProbe([], redis),
+  // The notification queue joins this list with incidents.
+  system: queueProbe([scans], redis),
 });
 
 const server = app.listen(env.API_PORT, () => {
@@ -29,7 +32,9 @@ const server = app.listen(env.API_PORT, () => {
 // Finish in-flight requests and close database connections before exiting.
 function shutdown() {
   server.close(() => {
-    void Promise.all([redis.quit(), prisma.$disconnect()]).then(() => process.exit(0));
+    void Promise.all([scans.close(), prisma.$disconnect()])
+      .then(() => redis.quit())
+      .then(() => process.exit(0));
   });
 }
 process.on("SIGINT", shutdown);
