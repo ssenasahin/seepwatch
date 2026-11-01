@@ -32,15 +32,22 @@ export interface Sighting {
 const isDuplicate = (err: unknown) =>
   err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 
+export interface Recorded {
+  // Findings seen for the first time: each opens an incident.
+  created: string[];
+  // Known findings that turned up somewhere new: their incidents' timelines say so.
+  seenAgain: string[];
+}
+
 // Stores what the hits found. A secret already known to this owner gets a new
-// location, not a new finding. Returns the ids of findings seen for the first time,
-// which are the ones that will open incidents.
+// location, not a new finding.
 export async function recordHits(
   { prisma, fingerprintKey }: RecordDeps,
   sighting: Sighting,
   hits: Hit[],
-): Promise<string[]> {
+): Promise<Recorded> {
   const created: string[] = [];
+  const seenAgain: string[] = [];
   const seen = new Set<string>();
   for (const hit of hits) {
     const fp = fingerprint(fingerprintKey, hit.secret);
@@ -75,7 +82,7 @@ export async function recordHits(
     }
 
     const line = sighting.numbers?.[hit.lineIndex] ?? hit.lineIndex + 1;
-    await prisma.findingLocation.createMany({
+    const { count } = await prisma.findingLocation.createMany({
       data: {
         findingId,
         source: sighting.source,
@@ -90,8 +97,9 @@ export async function recordHits(
       // Seen here before: the location is already on record.
       skipDuplicates: true,
     });
+    if (count > 0 && !created.includes(findingId)) seenAgain.push(findingId);
   }
-  return created;
+  return { created, seenAgain };
 }
 
 function encodePath(path: string): string {

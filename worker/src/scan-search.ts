@@ -39,6 +39,7 @@ export async function scanSearch(
   now = new Date(),
 ): Promise<ScanResult> {
   const newFindings: string[] = [];
+  const seenAgain: string[] = [];
   const mention = mentionPattern(watch.value);
   try {
     const results = await deps.github.searchCode(`"${watch.value}"`, SEARCH_RESULTS);
@@ -54,25 +55,25 @@ export async function scanSearch(
         (h) => h.detector === KEY_PATTERN_DETECTOR || near(h.lineIndex),
       );
       if (hits.length === 0) continue;
-      newFindings.push(
-        ...(await recordHits(
-          deps,
-          {
-            ownerId: watch.ownerId,
-            watchId: watch.id,
-            source: "GITHUB_CODE",
-            repository: result.repository,
-            path: result.path,
-            ref: result.ref,
-            committedAt: null,
-            lines,
-          },
-          hits,
-        )),
+      const recorded = await recordHits(
+        deps,
+        {
+          ownerId: watch.ownerId,
+          watchId: watch.id,
+          source: "GITHUB_CODE",
+          repository: result.repository,
+          path: result.path,
+          ref: result.ref,
+          committedAt: null,
+          lines,
+        },
+        hits,
       );
+      newFindings.push(...recorded.created);
+      seenAgain.push(...recorded.seenAgain);
     }
-    return { newFindings, cursor: now, error: null };
+    return { newFindings, seenAgain, cursor: now, error: null };
   } catch (err) {
-    return { newFindings, cursor: now, error: describeError(err) };
+    return { newFindings, seenAgain, cursor: now, error: describeError(err) };
   }
 }

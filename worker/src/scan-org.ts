@@ -26,6 +26,8 @@ export interface OrgWatch {
 
 export interface ScanResult {
   newFindings: string[];
+  // Known findings seen somewhere new.
+  seenAgain: string[];
   // Where the next scan starts.
   cursor: Date;
   // Why it stopped short, if it did. What it read before stopping is kept.
@@ -46,6 +48,7 @@ export async function scanOrg(
 ): Promise<ScanResult> {
   const since = watch.scanCursor ?? new Date(now.getTime() - FIRST_SCAN_DAYS * 86_400_000);
   const newFindings: string[] = [];
+  const seenAgain: string[] = [];
   let cursor = since;
 
   try {
@@ -71,23 +74,23 @@ export async function scanOrg(
         const texts = lines.map((l) => l.text);
         const hits = detect(texts, keyPatterns).filter((h) => lines[h.lineIndex]!.added);
         if (hits.length === 0) continue;
-        newFindings.push(
-          ...(await recordHits(
-            deps,
-            {
-              ownerId: watch.ownerId,
-              watchId: watch.id,
-              source: "GITHUB_COMMIT",
-              repository: commit.repo,
-              path: file.path,
-              ref: commit.sha,
-              committedAt: commit.committedAt,
-              lines: texts,
-              numbers: lines.map((l) => l.number),
-            },
-            hits,
-          )),
+        const recorded = await recordHits(
+          deps,
+          {
+            ownerId: watch.ownerId,
+            watchId: watch.id,
+            source: "GITHUB_COMMIT",
+            repository: commit.repo,
+            path: file.path,
+            ref: commit.sha,
+            committedAt: commit.committedAt,
+            lines: texts,
+            numbers: lines.map((l) => l.number),
+          },
+          hits,
         );
+        newFindings.push(...recorded.created);
+        seenAgain.push(...recorded.seenAgain);
       }
       // `since` is inclusive, so the next scan reads this moment's commits again;
       // their locations are already recorded and change nothing.
@@ -99,9 +102,9 @@ export async function scanOrg(
       overflowed.length > 0
         ? `${overflowed.join(", ")} had more than ${COMMITS_PER_REPO} new commits; the oldest weren't read.`
         : null;
-    return { newFindings, cursor, error };
+    return { newFindings, seenAgain, cursor, error };
   } catch (err) {
-    return { newFindings, cursor, error: describeError(err) };
+    return { newFindings, seenAgain, cursor, error: describeError(err) };
   }
 }
 
