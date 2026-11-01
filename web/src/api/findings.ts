@@ -4,7 +4,7 @@ import { api } from "./client";
 // Secrets the scanners found. Only a masked form ever reaches the browser.
 
 export interface FindingLocation {
-  source: "GITHUB_COMMIT" | "GITHUB_CODE";
+  source: "GITHUB_COMMIT" | "GITHUB_CODE" | "GIST" | "PASTEBIN";
   url: string;
   repository: string;
   path: string;
