@@ -27,6 +27,15 @@ export interface CodeResult {
   ref: string;
 }
 
+export interface Gist {
+  id: string;
+  // The owner's login; null for an anonymous gist.
+  owner: string | null;
+  url: string;
+  updatedAt: Date;
+  files: { name: string; rawUrl: string; size: number }[];
+}
+
 export interface GithubApi {
   // Public repositories, most recently pushed first.
   orgRepos(org: string): Promise<Repo[]>;
@@ -37,7 +46,15 @@ export interface GithubApi {
   searchCode(query: string, limit: number): Promise<CodeResult[]>;
   // A file's text, or null if it's gone or not text.
   fileText(repo: string, path: string, ref: string): Promise<string | null>;
+  // Public gists created or updated after `since`, newest first.
+  publicGists(since: Date, limit: number): Promise<Gist[]>;
+  // A gist file's text, or null if it's gone, too big or not text.
+  gistFileText(rawUrl: string): Promise<string | null>;
 }
+
+// Where gist files are served from. A raw URL anywhere else is refused: it came from
+// GitHub's answer, but the scanner fetches nothing it can't name in advance.
+const GIST_RAW_HOST = "gist.githubusercontent.com";
 
 // GitHub's limit ran out. Scans stop where they are and pick up after `resetAt`.
 export class RateLimitError extends Error {
@@ -161,10 +178,58 @@ export function httpGithub(token?: string): GithubApi {
       );
       if (res.status === 404) return null;
       if (!res.ok) throw new GithubError(`GitHub answered ${res.status} for ${repo}/${path}`);
-      if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) return null;
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.length > MAX_FILE_BYTES || bytes.includes(0)) return null;
-      return new TextDecoder().decode(bytes);
+      return readText(res);
+    },
+
+    async publicGists(since, limit) {
+      const gists: Gist[] = [];
+      for (let page = 1; gists.length < limit; page++) {
+        const batch = await json<
+          {
+            id: string;
+            html_url: string;
+            updated_at: string;
+            owner?: { login: string } | null;
+            files: Record<string, { filename: string; raw_url: string; size: number }>;
+          }[]
+        >(`/gists/public?since=${since.toISOString()}&per_page=${PER_PAGE}&page=${page}`);
+        gists.push(
+          ...batch.map((g) => ({
+            id: g.id,
+            owner: g.owner?.login ?? null,
+            url: g.html_url,
+            updatedAt: new Date(g.updated_at),
+            files: Object.values(g.files).map((f) => ({
+              name: f.filename,
+              rawUrl: f.raw_url,
+              size: f.size,
+            })),
+          })),
+        );
+        if (batch.length < PER_PAGE) break;
+      }
+      return gists.slice(0, limit);
+    },
+
+    async gistFileText(rawUrl) {
+      const url = new URL(rawUrl);
+      if (url.protocol !== "https:" || url.hostname !== GIST_RAW_HOST) return null;
+      const res = await fetch(url, {
+        headers: { "user-agent": "Seepwatch" },
+        redirect: "error",
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new GithubError(`GitHub answered ${res.status} for a gist file`);
+      return readText(res);
     },
   };
+}
+
+// The body as text, unless it's too big or binary (a NUL byte gives that away).
+async function readText(res: Response): Promise<string | null> {
+  if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) return null;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > MAX_FILE_BYTES || bytes.includes(0)) return null;
+  return new TextDecoder().decode(bytes);
 }
