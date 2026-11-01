@@ -79,6 +79,7 @@ export function AdminUsersPage() {
                       <th>Account</th>
                       <th>State</th>
                       <th>Plan</th>
+                      <th className="num">Watches</th>
                       <th>Two-factor</th>
                       <th>Joined</th>
                     </tr>
@@ -96,6 +97,7 @@ export function AdminUsersPage() {
                           <AccountState user={u} />
                         </td>
                         <td>{u.plan?.name ?? <span className="muted">Default</span>}</td>
+                        <td className="num">{u.watches}</td>
                         <td>{u.twoFactor ? "On" : <span className="muted">Off</span>}</td>
                         <td className="muted">{timeAgo(u.createdAt)}</td>
                       </tr>

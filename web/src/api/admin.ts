@@ -15,6 +15,7 @@ export interface AdminUserRow {
   lockedUntil: string | null;
   twoFactor: boolean;
   plan: { id: string; name: string } | null;
+  watches: number;
 }
 
 export interface Limits {

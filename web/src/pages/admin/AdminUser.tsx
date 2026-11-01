@@ -96,6 +96,12 @@ function UserBody({ data: { user, history } }: { data: AdminUserDetail }) {
         <section className="card card-body">
           <dl className="facts">
             <div>
+              <dt>Watches</dt>
+              <dd>
+                {user.watches} <span className="of">of {user.limits.maxWatches}</span>
+              </dd>
+            </div>
+            <div>
               <dt>Channels</dt>
               <dd>
                 {user.channels} <span className="of">of {user.limits.maxChannels}</span>
