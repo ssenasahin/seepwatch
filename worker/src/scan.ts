@@ -17,7 +17,7 @@ export interface ScanDeps extends RecordDeps {
 
 // Scans only what its owner proved is theirs, and only while it's switched on. An
 // address counts as proven when its domain is.
-const scannable = {
+export const scannable = {
   enabled: true,
   owner: { suspendedAt: null },
   OR: [
@@ -27,7 +27,10 @@ const scannable = {
   ],
 } satisfies Prisma.WatchWhereInput;
 
-async function ownerKeyPatterns(prisma: PrismaClient, ownerId: string): Promise<KeyPattern[]> {
+export async function ownerKeyPatterns(
+  prisma: PrismaClient,
+  ownerId: string,
+): Promise<KeyPattern[]> {
   const rows = await prisma.watch.findMany({
     where: { ownerId, kind: "KEY_PATTERN", enabled: true },
     select: { value: true, keyCharset: true, keyMinLength: true, keyMaxLength: true },
