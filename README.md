@@ -14,16 +14,15 @@ accounts, team, alert channels, escalation policies, signed links and admin pane
 
 The foundation runs: sign-up and sign-in with two-factor, teams and invites, Slack, Telegram and
 webhook channels, escalation policies, API keys and the admin panel with its audit log. You can add
-watches and prove they're yours. The scanners don't exist yet, so nothing is searched and no incident
-is ever opened.
+watches and prove they're yours. The worker scans GitHub for them and records what it finds, and the
+overview lists the latest findings. No incident is opened yet, so a finding doesn't alert anyone.
 
 What comes next, in order:
 
-1. Detectors, the GitHub source, findings and their fingerprints.
-2. The incident state machine, escalation that repeats until revoked, and signed links with two
+1. The incident state machine, escalation that repeats until revoked, and signed links with two
    actions: "I'm on it" and "revoked".
-3. Gist and paste site sources.
-4. The pages for findings and incidents.
+2. Gist and paste site sources.
+3. The pages for findings and incidents.
 
 ## Watches
 
@@ -47,12 +46,37 @@ it won't match the prefix inside a longer word.
 Each watch can have its own escalation policy; without one, a leak alerts you and every channel at
 once. Deleting a domain deletes the addresses on it.
 
+## Scanning
+
+The worker looks at GitHub in two ways.
+
+Verified organizations are read commit by commit, every 15 minutes. The scan lists the
+organization's public repositories (forks and archived ones are skipped), reads the commits made
+since the last scan and runs the detectors on the lines each commit added. The first scan goes back
+30 days. A scan reads at most 200 commits, oldest first, and the next one continues where it
+stopped, so a busy organization can't use up the hour's request allowance in one go.
+
+Verified domains and the addresses on them go through GitHub's code search every 6 hours. A key
+counts only if it sits within 10 lines of a mention of the domain or address; otherwise every key in
+any file that mentions `example.com` once would be yours. Your own key patterns count anywhere in
+such a file. Code search needs `GITHUB_TOKEN`, because GitHub refuses it to anonymous callers.
+
+The built-in detectors know AWS access keys, GitHub tokens, Slack tokens and webhooks, Stripe live
+keys, Google API keys and private key blocks. When a scan stops short, for example because the rate
+limit ran out, it keeps what it read and the watch shows why it stopped.
+
+Proof is checked again every night. A domain can expire and be bought by someone else, and an
+organization can change hands, so a watch whose token is missing three nights in a row stops being
+scanned until its owner proves it again.
+
 ## Design decisions
 
-**A raw secret is never stored.** A finding keeps the secret's SHA-256 hash, a masked form
-(`AKIA…7XQ2`) and the surrounding lines with the secret redacted. If Seepwatch kept the secrets it
-found, its own database would be the most valuable target in the system. The same hash found in a
-second place joins the existing incident as another location instead of opening a new one.
+**A raw secret is never stored.** A finding keeps a fingerprint of the secret (HMAC-SHA256 with a
+key derived from `ENCRYPTION_KEY`), a masked form (`AKIA…7XQ2`) and the surrounding lines with the
+secret redacted. If Seepwatch kept the secrets it found, its own database would be the most valuable
+target in the system. A plain hash wouldn't do either: the shape of most keys is public, so a
+short one could be guessed back from its hash. The same fingerprint found in a second place is added
+to the existing finding as another location instead of becoming a new one.
 
 **It only looks for what you own.** A domain is watched only after a DNS TXT record proves it is
 yours, and email addresses hang off a verified domain. Generic key patterns (`AKIA…`, `ghp_…`,
@@ -86,14 +110,21 @@ api/                  Express API
   src/escalation/     escalation policies
   src/team/           team members and invites
   src/watches/        watches, their values and verification
+  src/findings/       findings and where each was seen
   src/api-keys/       API keys
   src/admin/          users, plans, system health and the audit log
-worker/               BullMQ worker, where the scanners will run
+worker/               BullMQ worker
+  src/github.ts       the GitHub API calls the scanners make
+  src/scan-org.ts     reading an organization's new commits
+  src/scan-search.ts  code search for domains and addresses
+  src/scan.ts         which watches are due, and running one scan
+  src/reverify.ts     the nightly re-check of each proof
 db/                   Prisma schema, migrations and the code api and worker share
   src/network.ts      the SSRF guard for webhook deliveries
   src/crypto.ts       AES-256-GCM for secret columns
   src/escalation.ts   escalation steps and signed links
   src/watches.ts      key patterns as safe regular expressions
+  src/detectors.ts    the detectors, masking and fingerprints
   src/verification.ts DNS TXT and GitHub file verification
 web/                  React dashboard
 deployments/          production compose file and Caddy config
@@ -133,7 +164,7 @@ npm run build
 npm test                      # uses its own database, seepwatch_test
 ```
 
-The API tests run against a real PostgreSQL rather than mocks, because constraint and transaction
+The API and worker tests run against a real PostgreSQL rather than mocks, because constraint and transaction
 bugs only show up in a real database.
 
 ## Deployment
