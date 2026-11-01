@@ -6,8 +6,7 @@ import "./admin.css";
 
 const QUEUE_NAMES: Record<string, string> = {
   scans: "Scans",
-  notifications: "Alerts",
-  escalations: "Escalations",
+  alerts: "Alert rounds",
 };
 
 // Refreshed every 10 seconds.
