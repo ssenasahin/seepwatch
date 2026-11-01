@@ -1,4 +1,11 @@
-import { createPrisma, type Mail, type Mailer, type Transport } from "@seepwatch/db";
+import {
+  createPrisma,
+  type FetchGithubFile,
+  type Mail,
+  type Mailer,
+  type ResolveTxt,
+  type Transport,
+} from "@seepwatch/db";
 import { generate } from "otplib";
 import request, { type Response } from "supertest";
 import { createApp } from "../app.js";
@@ -19,6 +26,7 @@ export const testEnv: Env = {
   MAIL_FROM: "Seepwatch <test@seepwatch.local>",
   TRUST_PROXY: 0,
   AUTH_RATE_LIMIT_PER_MINUTE: 1000,
+  GITHUB_TOKEN: undefined,
 };
 
 export const prisma = createPrisma(TEST_DATABASE_URL);
@@ -35,6 +43,8 @@ const memoryMailer: Mailer = {
 export async function resetDatabase(): Promise<void> {
   outbox.length = 0;
   deliveries.length = 0;
+  for (const name of Object.keys(txtRecords)) delete txtRecords[name];
+  for (const path of Object.keys(githubFiles)) delete githubFiles[path];
   deliveryAnswer.status = 200;
   await prisma.$executeRawUnsafe("TRUNCATE TABLE users CASCADE");
 }
@@ -64,6 +74,18 @@ async function fakeResolve(hostname: string): Promise<string[]> {
   return addresses;
 }
 
+// Fake TXT records for domain verification, by name. A missing name doesn't exist.
+export const txtRecords: Record<string, string[][]> = {};
+const fakeResolveTxt: ResolveTxt = async (name) => {
+  const records = txtRecords[name];
+  if (!records) throw Object.assign(new Error(`queryTxt ENOTFOUND ${name}`), { code: "ENOTFOUND" });
+  return records;
+};
+
+// Fake files in organizations' .github repositories, keyed "org/path".
+export const githubFiles: Record<string, string> = {};
+const fakeGithubFile: FetchGithubFile = async (org, path) => githubFiles[`${org}/${path}`] ?? null;
+
 export function makeApp(env: Partial<Env> = {}, system?: SystemProbe) {
   return createApp({
     env: { ...testEnv, ...env },
@@ -71,6 +93,8 @@ export function makeApp(env: Partial<Env> = {}, system?: SystemProbe) {
     mailer: memoryMailer,
     resolveHost: fakeResolve,
     channelTransport: memoryTransport,
+    resolveTxt: fakeResolveTxt,
+    fetchGithubFile: fakeGithubFile,
     system,
   });
 }

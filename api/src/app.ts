@@ -1,8 +1,11 @@
 import {
+  githubFileFetcher,
   parseEncryptionKey,
+  type FetchGithubFile,
   type Mailer,
   type PrismaClient,
   type ResolveHost,
+  type ResolveTxt,
   type Transport,
 } from "@seepwatch/db";
 import cookieParser from "cookie-parser";
@@ -21,6 +24,7 @@ import { healthRouter } from "./health.js";
 import { errorHandler } from "./http.js";
 import { rejectCrossSiteRequests } from "./origin.js";
 import { teamRouter } from "./team/routes.js";
+import { watchRouter } from "./watches/routes.js";
 
 export interface AppDeps {
   env: Env;
@@ -32,6 +36,9 @@ export interface AppDeps {
   resolveHost?: ResolveHost;
   // Overridable so alert deliveries can be caught in tests.
   channelTransport?: Transport;
+  // Overridable so domain and organization verification needs no real DNS or GitHub.
+  resolveTxt?: ResolveTxt;
+  fetchGithubFile?: FetchGithubFile;
   // Queue and Redis figures for the admin panel; without it they read as unknown.
   system?: SystemProbe;
 }
@@ -45,6 +52,8 @@ export function createApp({
   checkDatabase,
   resolveHost,
   channelTransport,
+  resolveTxt,
+  fetchGithubFile = githubFileFetcher(env.GITHUB_TOKEN),
   system = noProbe,
 }: AppDeps) {
   const app = express();
@@ -82,6 +91,7 @@ export function createApp({
       transport: channelTransport,
     }),
   );
+  app.use("/api/watches", watchRouter({ prisma, authenticate, resolveTxt, fetchGithubFile }));
   app.use("/api/team", teamRouter({ prisma, mailer, authenticate, webOrigin: env.WEB_ORIGIN }));
   app.use("/api/escalation-policies", escalationRouter(prisma, authenticate));
   app.use("/api/api-keys", apiKeyRouter(prisma, authenticate));
