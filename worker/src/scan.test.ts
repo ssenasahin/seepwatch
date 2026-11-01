@@ -6,14 +6,10 @@ import { AWS, FakeGithub, sha } from "./test/fake-github.js";
 
 let github: FakeGithub;
 let ownerId: string;
-let announced: string[];
 const deps = (): ScanDeps => ({
   prisma,
   github,
   fingerprintKey: fingerprintKey(Buffer.alloc(32, 7)),
-  onNewFindings: async (ids) => {
-    announced.push(...ids);
-  },
 });
 
 const watch = (data: {
@@ -28,12 +24,11 @@ const watch = (data: {
 beforeEach(async () => {
   await resetDatabase();
   github = new FakeGithub();
-  announced = [];
   ownerId = (await makeOwner()).id;
 });
 
 describe("runScan", () => {
-  it("scans an organization, moves its cursor and announces new findings", async () => {
+  it("scans an organization, moves its cursor and opens an incident per new finding", async () => {
     const org = await watch({ kind: "GITHUB_ORG", value: "acme", verifiedAt: new Date() });
     github.repos.push({ fullName: "acme/api", pushedAt: new Date(), fork: false, archived: false });
     github.commits.set("acme/api", [{ sha: sha(1), committedAt: new Date(Date.now() - 60_000) }]);
@@ -45,7 +40,30 @@ describe("runScan", () => {
     expect(after.lastScanAt).not.toBeNull();
     expect(after.scanCursor).not.toBeNull();
     expect(after.lastScanError).toBeNull();
-    expect(announced).toHaveLength(1);
+    const incident = await prisma.incident.findFirstOrThrow({ include: { events: true } });
+    expect(incident).toMatchObject({ ownerId, status: "OPEN", round: 0 });
+    expect(incident.nextAlertAt).not.toBeNull();
+    expect(incident.events).toEqual([
+      expect.objectContaining({ type: "OPENED", detail: "Found in acme/api/.env" }),
+    ]);
+  });
+
+  it("notes a known secret seen somewhere new on its incident", async () => {
+    const org = await watch({ kind: "GITHUB_ORG", value: "acme", verifiedAt: new Date() });
+    github.repos.push({ fullName: "acme/api", pushedAt: new Date(), fork: false, archived: false });
+    github.commits.set("acme/api", [{ sha: sha(1), committedAt: new Date(Date.now() - 60_000) }]);
+    github.files.set(`acme/api@${sha(1)}`, [{ path: "a.env", patch: `@@ -0,0 +1 @@\n+K=${AWS}` }]);
+    await runScan(deps(), { watchId: org.id });
+
+    github.repos[0]!.pushedAt = new Date(Date.now() + 1000);
+    github.commits.set("acme/api", [{ sha: sha(2), committedAt: new Date(Date.now() + 1000) }]);
+    github.files.set(`acme/api@${sha(2)}`, [{ path: "b.env", patch: `@@ -0,0 +1 @@\n+K=${AWS}` }]);
+    await runScan(deps(), { watchId: org.id });
+
+    expect(await prisma.incident.count()).toBe(1);
+    const events = await prisma.incidentEvent.findMany({ orderBy: { id: "asc" } });
+    expect(events.map((e) => e.type)).toEqual(["OPENED", "SEEN_AGAIN"]);
+    expect(events[1]!.detail).toContain("2 places");
   });
 
   it("records why a scan stopped short", async () => {

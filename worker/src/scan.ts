@@ -1,5 +1,6 @@
 import type { KeyPattern, Prisma, PrismaClient, ScanJob } from "@seepwatch/db";
 import type { GithubApi } from "./github.js";
+import { noteSeenAgain, openIncidents } from "./incidents.js";
 import type { RecordDeps } from "./record.js";
 import { scanOrg, type ScanResult } from "./scan-org.js";
 import { scanSearch } from "./scan-search.js";
@@ -12,8 +13,6 @@ export const SEARCH_EVERY_MS = 6 * 60 * 60 * 1000;
 
 export interface ScanDeps extends RecordDeps {
   github: GithubApi;
-  // Told about each finding seen for the first time. Incidents hang off this later.
-  onNewFindings?: (ids: string[]) => Promise<void>;
 }
 
 // Scans only what its owner proved is theirs, and only while it's switched on. An
@@ -68,7 +67,8 @@ export async function runScan(deps: ScanDeps, { watchId }: ScanJob): Promise<Sca
       ...(watch.kind === "GITHUB_ORG" && { scanCursor: result.cursor }),
     },
   });
-  if (result.newFindings.length > 0) await deps.onNewFindings?.(result.newFindings);
+  await openIncidents(prisma, result.newFindings);
+  await noteSeenAgain(prisma, result.seenAgain);
   return result;
 }
 
