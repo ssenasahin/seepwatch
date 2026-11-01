@@ -1,7 +1,8 @@
 import { fingerprintKey } from "@seepwatch/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { GithubError } from "./github.js";
-import { NEAR_LINES, scanSearch, type SearchWatch } from "./scan-search.js";
+import { NEAR_LINES } from "./match.js";
+import { scanSearch, type SearchWatch } from "./scan-search.js";
 import { prisma, makeOwner, resetDatabase } from "./test/database.js";
 import { AWS, AWS_2, FakeGithub, sha, STRIPE } from "./test/fake-github.js";
 
