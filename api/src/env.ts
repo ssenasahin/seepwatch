@@ -23,6 +23,12 @@ const schema = z.object({
   // How many reverse proxies sit in front of the API; needed to read the client's real IP.
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
+  // Raises GitHub's limit from 60 to 5,000 requests an hour. A fine-grained token with
+  // no permissions is enough: everything Seepwatch reads on GitHub is public.
+  GITHUB_TOKEN: z
+    .string()
+    .optional()
+    .transform((v) => v || undefined),
 });
 
 export type Env = z.infer<typeof schema>;
