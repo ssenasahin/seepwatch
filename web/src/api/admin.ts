@@ -44,6 +44,8 @@ export interface AdminUserDetail {
     liveSessions: number;
     lastSignInAt: string | null;
     limits: Limits;
+    // Addresses locked out of the account after wrong passwords from each.
+    lockedAddresses: number;
   };
   history: AuditEntry[];
 }

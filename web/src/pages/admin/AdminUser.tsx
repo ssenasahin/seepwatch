@@ -87,7 +87,16 @@ function UserBody({ data: { user, history } }: { data: AdminUserDetail }) {
         )}
         {user.lockedUntil && (
           <Alert tone="info">
-            Locked after too many wrong passwords, until {formatTime(user.lockedUntil)}.
+            Locked after wrong passwords from many places, or wrong two-factor codes, until{" "}
+            {formatTime(user.lockedUntil)}.
+          </Alert>
+        )}
+        {!user.lockedUntil && user.lockedAddresses > 0 && (
+          <Alert tone="info">
+            {user.lockedAddresses === 1
+              ? "One address is"
+              : `${user.lockedAddresses} addresses are`}{" "}
+            locked out after wrong passwords from there. Signing in from anywhere else still works.
           </Alert>
         )}
         {notice && <Alert tone="success">{notice}</Alert>}
@@ -175,7 +184,7 @@ function UserBody({ data: { user, history } }: { data: AdminUserDetail }) {
               Send link
             </button>
           </div>
-          {user.lockedUntil && (
+          {(user.lockedUntil || user.lockedAddresses > 0) && (
             <div className="admin-action">
               <div>
                 <strong>Unlock</strong>
