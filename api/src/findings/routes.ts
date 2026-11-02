@@ -37,6 +37,7 @@ type Row = {
   watch: { id: string; kind: string; value: string; label: string | null } | null;
   locations: Record<keyof typeof locationFields, unknown>[];
   _count: { locations: number };
+  incident: { id: string; status: string } | null;
 };
 
 // What a finding looks like to its owner. The fingerprint stays in the database: it
@@ -51,6 +52,8 @@ function present(f: Row) {
     lastSeenAt: f.lastSeenAt,
     watch: f.watch,
     locationCount: f._count.locations,
+    // The incident it opened, where it's dealt with.
+    incident: f.incident,
     locations: f.locations,
   };
 }
@@ -63,6 +66,7 @@ export function findingRouter(prisma: PrismaClient, authenticate: RequestHandler
     watch: { select: { id: true, kind: true, value: true, label: true } },
     locations: { select: locationFields, orderBy: { seenAt: "desc" as const }, take: locations },
     _count: { select: { locations: true } },
+    incident: { select: { id: true, status: true } },
   });
 
   // Newest first, a page at a time.

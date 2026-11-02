@@ -63,6 +63,8 @@ describe("GET /api/findings", () => {
       masked: "AKIA…MNOP",
       watch: { kind: "GITHUB_ORG", value: "acme" },
       locationCount: 5,
+      // The worker opens it; this test stored the finding alone.
+      incident: null,
     });
     // A few recent locations in the list, most recent first.
     expect(newest.locations).toHaveLength(3);
