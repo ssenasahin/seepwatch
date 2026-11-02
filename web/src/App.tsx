@@ -22,6 +22,12 @@ const brand = async () => ({ Component: (await import("./pages/Brand")).BrandPag
 const respond = async () => ({
   Component: (await import("./pages/incidents/Respond")).RespondPage,
 });
+const incidents = async () => ({
+  Component: (await import("./pages/incidents/Incidents")).IncidentsPage,
+});
+const incident = async () => ({
+  Component: (await import("./pages/incidents/IncidentDetail")).IncidentDetailPage,
+});
 const watches = async () => ({
   Component: (await import("./pages/watches/Watches")).WatchesPage,
 });
@@ -78,6 +84,8 @@ const router = createBrowserRouter([
         element: <Layout />,
         children: [
           { path: "/", element: <OverviewPage />, handle: title("Overview") },
+          { path: "/incidents", lazy: incidents, handle: title("Leaks") },
+          { path: "/incidents/:id", lazy: incident, handle: title("Leak") },
           { path: "/watches", lazy: watches, handle: title("Watches") },
           { path: "/channels", lazy: channels, handle: title("Channels") },
           { path: "/escalation", lazy: escalation, handle: title("Escalation") },

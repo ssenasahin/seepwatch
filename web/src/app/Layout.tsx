@@ -12,6 +12,7 @@ import {
   ScrollText,
   Shapes,
   ShieldCheck,
+  Siren,
   Sun,
   UserCog,
   Users,
@@ -45,6 +46,7 @@ const NAV: NavSection[] = [
     heading: "Watch",
     items: [
       { to: "/", label: "Overview", icon: Radar },
+      { to: "/incidents", label: "Leaks", icon: Siren },
       { to: "/watches", label: "Watches", icon: Eye },
     ],
   },
