@@ -33,20 +33,22 @@ export function RespondPage() {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
   const by = params.get("by") ?? "";
+  const exp = params.get("exp") ?? "";
   const sig = params.get("sig") ?? "";
-  const query = `by=${encodeURIComponent(by)}&sig=${encodeURIComponent(sig)}`;
+  const query = new URLSearchParams({ by, exp, sig }).toString();
+  // From the address bar: encoded, so it can't walk the request to another API path.
+  const path = `/respond/${encodeURIComponent(id)}`;
 
   const preview = useQuery({
     queryKey: ["respond", id, by],
-    queryFn: () =>
-      api<{ incident: Summary; as: string }>(`/respond/${id}?${query}`, { auth: false }),
+    queryFn: () => api<{ incident: Summary; as: string }>(`${path}?${query}`, { auth: false }),
     retry: false,
   });
   const respond = useMutation({
     mutationFn: (action: "ACKNOWLEDGE" | "REVOKE") =>
-      api<{ incident: Summary }>(`/respond/${id}`, {
+      api<{ incident: Summary }>(path, {
         method: "POST",
-        body: { by, sig, action },
+        body: { by, exp, sig, action },
         auth: false,
       }),
   });
