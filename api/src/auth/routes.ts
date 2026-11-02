@@ -1,12 +1,11 @@
-import { Prisma, type User } from "@seepwatch/db";
 import { Router } from "express";
 import { z } from "zod";
 import { HttpError, validate } from "../http.js";
-import { isLocked } from "./lockout.js";
 import { authOf, requireAuth } from "./middleware.js";
-import { burnPasswordCheck, hashPassword, passwordProblem, verifyPassword } from "./password.js";
+import { burnPasswordCheck, verifyPassword } from "./password.js";
 import { resetRoutes } from "./reset.js";
 import { sessionRoutes } from "./session-routes.js";
+import { signupRoutes } from "./signup.js";
 import { revokeSession, rotateSession } from "./sessions.js";
 import {
   authLimiter,
@@ -17,7 +16,8 @@ import {
   issueSession,
   SUSPENDED,
   publicUser,
-  recordFailedSignIn,
+  recordFailedPassword,
+  signInLocked,
   REFRESH_COOKIE,
   refreshCookieOptions,
   type AuthDeps,
@@ -35,40 +35,19 @@ export function authRouter(deps: AuthDeps) {
   const router = Router();
   const limiter = authLimiter(env.AUTH_RATE_LIMIT_PER_MINUTE);
 
-  router.post("/register", limiter, async (req, res) => {
-    const body = validate(credentials, req.body);
-    const problem = passwordProblem(body.password, body.email);
-    if (problem) throw new HttpError(400, "Choose a stronger password", { password: [problem] });
-
-    let user: User;
-    try {
-      user = await prisma.user.create({
-        data: { email: body.email, passwordHash: await hashPassword(body.password) },
-      });
-    } catch (error) {
-      // P2002: unique constraint, the email is taken.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new HttpError(409, "An account with this email already exists");
-      }
-      throw error;
-    }
-
-    res.status(201).json(await issueSession(deps, req, res, user, false));
-  });
-
   router.post("/login", limiter, async (req, res) => {
     const body = validate(credentials, req.body);
     const user = await prisma.user.findUnique({ where: { email: body.email } });
 
     // Unknown and locked accounts still pay for a full password check, so neither
     // the message nor the response time distinguishes them from a wrong password.
-    if (!user || isLocked(user.lockedUntil, new Date())) {
+    if (!user || (await signInLocked(prisma, user, req.ip))) {
       await burnPasswordCheck(body.password);
       throw new HttpError(401, INVALID_CREDENTIALS);
     }
 
     if (!(await verifyPassword(user.passwordHash, body.password))) {
-      await recordFailedSignIn(prisma, user.id);
+      await recordFailedPassword(prisma, user.id, req.ip);
       throw new HttpError(401, INVALID_CREDENTIALS);
     }
     // Said only after the right password, so it reveals nothing to a guesser, and
@@ -85,7 +64,7 @@ export function authRouter(deps: AuthDeps) {
       return;
     }
 
-    await clearFailedSignIns(prisma, user);
+    await clearFailedSignIns(prisma, user, req.ip);
     res.json(await issueSession(deps, req, res, user, false));
   });
 
@@ -128,6 +107,7 @@ export function authRouter(deps: AuthDeps) {
     res.json({ user: publicUser(user) });
   });
 
+  router.use(signupRoutes(deps));
   router.use(twoFactorRoutes(deps));
   router.use(resetRoutes(deps));
   router.use(sessionRoutes(deps));

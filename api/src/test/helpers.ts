@@ -46,7 +46,7 @@ export async function resetDatabase(): Promise<void> {
   for (const name of Object.keys(txtRecords)) delete txtRecords[name];
   for (const path of Object.keys(githubFiles)) delete githubFiles[path];
   deliveryAnswer.status = 200;
-  await prisma.$executeRawUnsafe("TRUNCATE TABLE users CASCADE");
+  await prisma.$executeRawUnsafe("TRUNCATE TABLE users, pending_signups CASCADE");
 }
 
 // Alerts to Slack, Telegram and webhooks, caught on the way out. Tests set the answer.
@@ -111,10 +111,25 @@ export function cookiePair(setCookie: string): string {
 
 export const GOOD_PASSWORD = "amber-lantern-over-the-harbour";
 
+// The token in the last sign-up link mailed to `email`.
+export function signupToken(email: string): string {
+  const mail = outbox.findLast((m) => m.to === email && m.text.includes("/verify-email?token="));
+  if (!mail) throw new Error(`No sign-up link was mailed to ${email}`);
+  return /verify-email\?token=([\w-]+)/.exec(mail.text)![1]!;
+}
+
+// Signs up and follows the emailed link, as a new user would.
 export async function signUp(app: ReturnType<typeof makeApp>, email = "ada@example.com") {
-  const res = await request(app)
+  const registered = await request(app)
     .post("/api/auth/register")
     .send({ email, password: GOOD_PASSWORD });
+  if (registered.status !== 202) throw new Error(`Sign-up answered ${registered.status}`);
+  // The email goes out without being awaited.
+  await new Promise((done) => setImmediate(done));
+  const res = await request(app)
+    .post("/api/auth/verify-email")
+    .send({ token: signupToken(email.trim().toLowerCase()) });
+  if (res.status !== 201) throw new Error(`Verifying answered ${res.status}`);
   return { accessToken: res.body.accessToken as string, cookie: cookiePair(refreshCookie(res)!) };
 }
 

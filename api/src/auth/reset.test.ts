@@ -28,8 +28,9 @@ describe("forgotten passwords", () => {
     expect(known.status).toBe(202);
     expect(unknown.body).toEqual(known.body);
     await lastResetToken();
-    expect(outbox).toHaveLength(1);
-    expect(outbox[0]!.to).toBe(EMAIL);
+    const resets = outbox.filter((m) => m.subject === "Reset your Seepwatch password");
+    expect(resets).toHaveLength(1);
+    expect(resets[0]!.to).toBe(EMAIL);
   });
 
   it("resets the password once, signs out every session and keeps only a hash of the token", async () => {
