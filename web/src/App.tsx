@@ -6,6 +6,7 @@ import { ForgotPasswordPage } from "./pages/auth/ForgotPassword";
 import { ResetPasswordPage } from "./pages/auth/ResetPassword";
 import { SignInPage } from "./pages/auth/SignIn";
 import { SignUpPage } from "./pages/auth/SignUp";
+import { VerifyEmailPage } from "./pages/auth/VerifyEmail";
 import { NotFoundPage } from "./pages/NotFound";
 import { OverviewPage } from "./pages/Overview";
 import { SecurityPage } from "./pages/settings/Security";
@@ -74,6 +75,11 @@ const router = createBrowserRouter([
         handle: title("Reset password"),
       },
       { path: "/reset-password", element: <ResetPasswordPage />, handle: title("New password") },
+      {
+        path: "/verify-email",
+        element: <VerifyEmailPage />,
+        handle: title("Finish creating your account"),
+      },
       { path: "/respond/:id", lazy: respond, handle: title("Leak") },
     ],
   },

@@ -22,6 +22,7 @@ interface AuthContextValue {
   state: AuthState;
   signIn(email: string, password: string): Promise<SignInResult>;
   completeSignIn(challengeToken: string, factor: SecondFactor): Promise<void>;
+  // Emails a link; the account exists once it's used (see VerifyEmailPage).
   signUp(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   signOutEverywhere(): Promise<void>;
@@ -77,13 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
       },
       async signUp(email, password) {
-        begin(
-          await api<SessionBody>("/auth/register", {
-            method: "POST",
-            body: { email, password },
-            auth: false,
-          }),
-        );
+        await api("/auth/register", { method: "POST", body: { email, password }, auth: false });
       },
       async signOut() {
         await api("/auth/logout", { method: "POST", auth: false }).catch(() => {});

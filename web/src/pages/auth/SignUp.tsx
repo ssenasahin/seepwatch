@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { ApiError } from "../../api/client";
 import { AuthHeader } from "../../auth/AuthLayout";
 import { useAuth } from "../../auth/AuthProvider";
@@ -7,7 +7,7 @@ import { Alert, TextField } from "../../components";
 
 export function SignUpPage() {
   const { signUp } = useAuth();
-  const navigate = useNavigate();
+  const [sent, setSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
@@ -19,7 +19,7 @@ export function SignUpPage() {
     setError(null);
     try {
       await signUp(email, password);
-      navigate("/", { replace: true });
+      setSent(true);
     } catch (err) {
       setError(
         err instanceof ApiError ? err : new ApiError(0, "Couldn't reach Seepwatch. Try again."),
@@ -29,13 +29,30 @@ export function SignUpPage() {
     }
   }
 
+  if (sent) {
+    return (
+      <>
+        <AuthHeader title="Check your inbox" />
+        {/* The same whether or not the address already has an account: that one gets a
+            note saying so, and this page never tells. */}
+        <Alert tone="success">
+          We sent a link to <strong>{email}</strong>. Open it within 24 hours to finish creating
+          your account.
+        </Alert>
+        <div className="auth-links">
+          <Link to="/sign-in">Back to sign in</Link>
+        </div>
+      </>
+    );
+  }
+
   const passwordError = error?.fieldError("password");
   const emailError = error?.fieldError("email");
 
   return (
     <>
       <AuthHeader title="Create your account">
-        Start watching your sites, APIs and cron jobs in a couple of minutes.
+        Find out when your keys leak, before someone else uses them.
       </AuthHeader>
       <form className="auth-form" onSubmit={submit} noValidate>
         {error && !passwordError && !emailError && <Alert tone="error">{error.message}</Alert>}
@@ -58,7 +75,7 @@ export function SignUpPage() {
           error={passwordError}
         />
         <button className="btn btn-primary btn-block" disabled={busy || !email || !password}>
-          {busy ? "Creating account…" : "Create account"}
+          {busy ? "Sending…" : "Create account"}
         </button>
       </form>
       <div className="auth-links">
