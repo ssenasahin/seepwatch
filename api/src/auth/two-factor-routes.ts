@@ -4,6 +4,7 @@ import { z } from "zod";
 import { HttpError, validate } from "../http.js";
 import { isLocked } from "./lockout.js";
 import { authOf, requireAuth } from "./middleware.js";
+import { verifyPassword } from "./password.js";
 import {
   authLimiter,
   clearFailedSignIns,
@@ -54,12 +55,24 @@ export function twoFactorRoutes(deps: AuthDeps) {
   });
 
   // Step 2: a correct code proves the app holds the secret, so two-factor turns on.
+  // The password too: once on, two-factor can't be turned off, so whoever holds a
+  // session alone (a borrowed laptop, a stolen token) must not be able to enrol
+  // their own phone and lock the owner out.
   router.post("/2fa/verify", auth, limiter, async (req, res) => {
     const claims = authOf(req);
-    const { code } = validate(z.object({ code: totpCode }), req.body);
+    const { code, password } = validate(
+      z.object({ code: totpCode, password: z.string().min(1).max(256) }),
+      req.body,
+    );
     const user = await prisma.user.findUniqueOrThrow({ where: { id: claims.userId } });
     if (user.totpEnabledAt) throw new HttpError(409, "Two-factor sign-in is already on");
     if (!user.totpSecret) throw new HttpError(400, "Start two-factor setup first");
+    if (!(await verifyPassword(user.passwordHash, password))) {
+      await recordFailedSignIn(prisma, user.id);
+      throw new HttpError(400, "That password isn't right", {
+        password: ["Enter the password you sign in with."],
+      });
+    }
 
     const step = await checkTotp(decryptSecret(user.totpSecret, encryptionKey), code, null);
     if (step === null) {
@@ -80,6 +93,12 @@ export function twoFactorRoutes(deps: AuthDeps) {
       }),
       // This session just proved the second factor.
       prisma.session.update({ where: { id: claims.sessionId }, data: { mfa: true } }),
+      // Every other one never did. Turning two-factor on is often how someone shuts
+      // out a person who got their password; they mustn't keep a session.
+      prisma.session.updateMany({
+        where: { userId: user.id, id: { not: claims.sessionId }, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
     ]);
 
     const accessToken = await signAccessToken({ ...claims, mfa: true }, env.JWT_SECRET);

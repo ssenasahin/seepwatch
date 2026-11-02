@@ -1,3 +1,4 @@
+import { generate } from "otplib";
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -51,6 +52,44 @@ describe("turning two-factor on", () => {
     expect(me.body.user.twoFactorEnabled).toBe(true);
   });
 
+  it("needs the password too, so a session alone can't enrol another phone", async () => {
+    const app = makeApp();
+    const { accessToken } = await signUp(app);
+    const setup = await request(app)
+      .post("/api/auth/2fa/setup")
+      .set("Authorization", `Bearer ${accessToken}`);
+    const code = await generate({ secret: setup.body.secret as string });
+
+    for (const body of [{ code }, { code, password: "not-the-password" }]) {
+      const res = await request(app)
+        .post("/api/auth/2fa/verify")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send(body);
+      expect(res.status).toBe(400);
+    }
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });
+    expect(user.totpEnabledAt).toBeNull();
+    expect(user.failedLogins).toBe(1);
+  });
+
+  it("ends every other session when it turns on", async () => {
+    const app = makeApp();
+    const { accessToken } = await signUp(app);
+    // Someone else signed in with the same password, on another device.
+    const other = await request(app)
+      .post("/api/auth/login")
+      .send({ email: EMAIL, password: GOOD_PASSWORD });
+
+    const { accessToken: upgraded } = await enableTwoFactor(app, accessToken);
+
+    const theirs = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${other.body.accessToken as string}`);
+    expect(theirs.status).toBe(401);
+    const mine = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${upgraded}`);
+    expect(mine.status).toBe(200);
+  });
+
   it("stays off after a wrong code", async () => {
     const app = makeApp();
     const { accessToken } = await signUp(app);
@@ -59,7 +98,7 @@ describe("turning two-factor on", () => {
     const res = await request(app)
       .post("/api/auth/2fa/verify")
       .set("Authorization", `Bearer ${accessToken}`)
-      .send({ code: "000000" });
+      .send({ code: "000000", password: GOOD_PASSWORD });
 
     expect(res.status).toBe(400);
     const user = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL } });

@@ -127,7 +127,7 @@ export async function enableTwoFactor(app: ReturnType<typeof makeApp>, accessTok
   const verified = await request(app)
     .post("/api/auth/2fa/verify")
     .set("Authorization", `Bearer ${accessToken}`)
-    .send({ code: await generate({ secret }) });
+    .send({ code: await generate({ secret }), password: GOOD_PASSWORD });
   return {
     secret,
     backupCodes: verified.body.backupCodes as string[],
