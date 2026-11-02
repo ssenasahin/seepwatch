@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { makeApp, outbox, prisma, resetDatabase, signUp } from "../test/helpers.js";
+import { MAX_TEAM_SIZE } from "./routes.js";
 
 afterAll(() => prisma.$disconnect());
 beforeEach(resetDatabase);
@@ -84,6 +85,31 @@ describe("team", () => {
     const token = /\/invites\/([\w-]+)/.exec(outbox.at(-1)!.text)![1]!;
     const again = await grace.as(request(grace.app).post(`/api/team/invites/${token}/accept`));
     expect(again.status).toBe(404);
+  });
+
+  it("counts invites still waiting toward the team's size", async () => {
+    const ada = await signedIn("ada@example.com");
+    await ada.as(request(ada.app).get("/api/team"));
+    const team = await prisma.team.findUniqueOrThrow({ where: { ownerId: ada.userId } });
+    // Ada, and invites out to fill every other place.
+    await prisma.teamInvite.createMany({
+      data: Array.from({ length: MAX_TEAM_SIZE - 1 }, (_, i) => ({
+        teamId: team.id,
+        email: `person${i}@example.com`,
+        tokenHash: `hash-${i}`,
+        expiresAt: new Date(Date.now() + 86_400_000),
+      })),
+    });
+
+    const full = await ada
+      .as(request(ada.app).post("/api/team/invites"))
+      .send({ email: "one-more@example.com" });
+    expect(full.status).toBe(403);
+    // Sending one of them again replaces it, so that still works.
+    const again = await ada
+      .as(request(ada.app).post("/api/team/invites"))
+      .send({ email: "person0@example.com" });
+    expect(again.status).toBe(201);
   });
 
   it("removes a member from the team and from its policies", async () => {

@@ -116,8 +116,9 @@ export function teamRouter({ prisma, mailer, authenticate, webOrigin }: TeamDeps
     if (already) {
       throw new HttpError(400, "Invalid request", { email: ["Already on your team"] });
     }
-    const size = await prisma.teamMember.count({ where: { teamId: team.id } });
-    if (size >= MAX_TEAM_SIZE) {
+    // Invites still waiting count too, or fifty sent at once would all be accepted.
+    // A new invite to an address replaces its old one, so that one doesn't count.
+    if ((await teamSize(prisma, team.id, email)) >= MAX_TEAM_SIZE) {
       throw new HttpError(403, `A team can have up to ${MAX_TEAM_SIZE} people`);
     }
 
@@ -201,6 +202,10 @@ export function teamRouter({ prisma, mailer, authenticate, webOrigin }: TeamDeps
       );
     }
     if (invite.team.ownerId === userId) throw new HttpError(400, "That's your own team");
+    const members = await prisma.teamMember.count({ where: { teamId: invite.teamId } });
+    if (members >= MAX_TEAM_SIZE) {
+      throw new HttpError(403, `This team is full: it has ${MAX_TEAM_SIZE} people already`);
+    }
 
     await prisma.$transaction([
       prisma.teamInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } }),
@@ -214,6 +219,17 @@ export function teamRouter({ prisma, mailer, authenticate, webOrigin }: TeamDeps
   });
 
   return router;
+}
+
+// Members, plus invites not yet taken up or run out, apart from `except`'s.
+async function teamSize(prisma: PrismaClient, teamId: string, except: string) {
+  const [members, waiting] = await Promise.all([
+    prisma.teamMember.count({ where: { teamId } }),
+    prisma.teamInvite.count({
+      where: { teamId, acceptedAt: null, expiresAt: { gt: new Date() }, email: { not: except } },
+    }),
+  ]);
+  return members + waiting;
 }
 
 async function findInvite(prisma: PrismaClient, token: string) {
