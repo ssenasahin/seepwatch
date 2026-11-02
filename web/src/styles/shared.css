@@ -217,3 +217,15 @@ fieldset.field {
   font-size: var(--text-sm);
   color: var(--muted);
 }
+
+/* "Load older" under a long list. */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
