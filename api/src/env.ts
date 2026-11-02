@@ -1,4 +1,7 @@
+import { looksMadeUp } from "@seepwatch/db";
 import { z } from "zod";
+
+const MADE_UP = "doesn't look random; generate one with the command in .env.example";
 
 // Validate configuration once at startup, so a missing variable stops the process
 // with a clear message instead of failing later on the first request that needs it.
@@ -10,11 +13,15 @@ const schema = z.object({
   // Where the job queues live; the worker reads the same ones.
   REDIS_URL: z.url().default("redis://127.0.0.1:6379"),
   // Signs access tokens. Anyone holding it can mint a token for any user.
-  JWT_SECRET: z.string().min(32, "must be at least 32 characters"),
+  JWT_SECRET: z
+    .string()
+    .min(32, "must be at least 32 characters")
+    .refine((v) => !looksMadeUp(v), MADE_UP),
   // Encrypts TOTP secrets and channel tokens at rest. Losing it makes them unreadable.
   ENCRYPTION_KEY: z
     .string()
-    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded"),
+    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded")
+    .refine((v) => !looksMadeUp(Buffer.from(v, "base64")), MADE_UP),
   SMTP_HOST: z.string().default("127.0.0.1"),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
   SMTP_USER: z.string().optional(),

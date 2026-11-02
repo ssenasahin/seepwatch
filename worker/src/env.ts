@@ -1,4 +1,7 @@
+import { looksMadeUp } from "@seepwatch/db";
 import { z } from "zod";
+
+const MADE_UP = "doesn't look random; generate one with the command in .env.example";
 
 // Checked once at start-up, like the API's, so a typo stops the worker immediately.
 const schema = z.object({
@@ -14,7 +17,8 @@ const schema = z.object({
   // The API's key, to open channel settings and sign links in alerts.
   ENCRYPTION_KEY: z
     .string()
-    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded"),
+    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded")
+    .refine((v) => !looksMadeUp(Buffer.from(v, "base64")), MADE_UP),
   // Optional, but without it GitHub allows 60 requests an hour and code search none.
   GITHUB_TOKEN: z
     .string()
