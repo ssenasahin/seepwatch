@@ -76,6 +76,17 @@ await maintenance.upsertJobScheduler(
   { name: "reverify", opts: { removeOnComplete: true, removeOnFail: { count: 30 } } },
 );
 
+// Every night: forget wrong-password counts from addresses quiet for a day, and
+// sign-ups whose link ran out unused.
+await maintenance.upsertJobScheduler(
+  "prune-sign-in-leftovers",
+  { pattern: "30 3 * * *" },
+  {
+    name: "prune-sign-in-leftovers",
+    opts: { removeOnComplete: true, removeOnFail: { count: 30 } },
+  },
+);
+
 await alerts.upsertJobScheduler(
   "send-due-alerts",
   { every: ALERTS_EVERY_MS },
@@ -120,6 +131,15 @@ const maintenanceWorker = new Worker(
           opts: { jobId: scanJobId(watchId), removeOnComplete: true, removeOnFail: true },
         })),
       );
+      return;
+    }
+    if (job.name === "prune-sign-in-leftovers") {
+      const now = new Date();
+      const throttles = await prisma.signInThrottle.deleteMany({
+        where: { updatedAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      });
+      const signups = await prisma.pendingSignup.deleteMany({ where: { expiresAt: { lt: now } } });
+      console.log(`forgot ${throttles.count} sign-in throttles and ${signups.count} sign-ups`);
       return;
     }
     const { checked, revoked } = await reverifyWatches({
