@@ -14,7 +14,7 @@ import express from "express";
 import helmet from "helmet";
 import { adminRouter } from "./admin/routes.js";
 import { noProbe, type SystemProbe } from "./admin/system.js";
-import { apiKeyRouter } from "./api-keys/routes.js";
+import { apiKeyRouter, requireApiKey, sessionOrApiKey } from "./api-keys/routes.js";
 import { requireAuth } from "./auth/middleware.js";
 import { authRouter } from "./auth/routes.js";
 import { channelRouter } from "./channels/routes.js";
@@ -93,9 +93,14 @@ export function createApp({
       transport: channelTransport,
     }),
   );
-  app.use("/api/watches", watchRouter({ prisma, authenticate, resolveTxt, fetchGithubFile }));
-  app.use("/api/findings", findingRouter(prisma, authenticate));
-  app.use("/api/incidents", incidentRouter(prisma, authenticate));
+  // What a script needs: what's watched, what was found, and responding to it.
+  const sessionOrKey = sessionOrApiKey(authenticate, requireApiKey(prisma));
+  app.use(
+    "/api/watches",
+    watchRouter({ prisma, authenticate: sessionOrKey, resolveTxt, fetchGithubFile }),
+  );
+  app.use("/api/findings", findingRouter(prisma, sessionOrKey));
+  app.use("/api/incidents", incidentRouter(prisma, sessionOrKey));
   // Public: an alert's signed link is the only proof needed.
   app.use("/api/respond", respondRouter(prisma, encryptionKey));
   app.use("/api/team", teamRouter({ prisma, mailer, authenticate, webOrigin: env.WEB_ORIGIN }));
