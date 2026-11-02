@@ -113,7 +113,11 @@ function RecentFindings({ findings, failed }: { findings?: Finding[]; failed: bo
             <li key={f.id} className="item-row">
               <div className="item-main">
                 <div className="item-title">
-                  <span>{f.detectorLabel}</span>
+                  {f.incident ? (
+                    <Link to={`/incidents/${f.incident.id}`}>{f.detectorLabel}</Link>
+                  ) : (
+                    <span>{f.detectorLabel}</span>
+                  )}
                   <code className="mono">{f.masked}</code>
                 </div>
                 <div className="item-meta">

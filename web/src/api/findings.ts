@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./client";
+import type { IncidentStatus } from "./incidents";
 
 // Secrets the scanners found. Only a masked form ever reaches the browser.
 
@@ -24,6 +25,7 @@ export interface Finding {
   lastSeenAt: string;
   watch: { id: string; kind: string; value: string; label: string | null } | null;
   locationCount: number;
+  incident: { id: string; status: IncidentStatus } | null;
   locations: FindingLocation[];
 }
 
