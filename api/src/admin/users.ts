@@ -187,8 +187,10 @@ export function userAdminRouter({ prisma, mailer, webOrigin }: UserAdminDeps) {
     const { id } = validate(idParams, req.params);
     const user = await findUser(id);
 
-    const link = await createResetLink(prisma, webOrigin, id, ADMIN_RESET_TTL_MS);
+    // Recorded first: a link that works must never be missing from the log. If making
+    // it fails after this, the log shows one too many, which is the safe way round.
     await audit(prisma, actor, "user.reset_link", { id, label: user.email });
+    const link = await createResetLink(prisma, webOrigin, id, ADMIN_RESET_TTL_MS);
     try {
       await mailer.send(resetEmail(user.email, link, true));
     } catch {
