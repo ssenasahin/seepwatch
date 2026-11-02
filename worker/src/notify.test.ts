@@ -46,4 +46,18 @@ describe("renderAlert", () => {
     expect(mail.html).not.toContain("<script>");
     expect(mail.html).toContain("&lt;script&gt;");
   });
+
+  it("breaks addresses a leaker put in a file name, so they can't be clicked", () => {
+    const { mail, message } = render({
+      source: "GIST",
+      repository: "someone/1f2e",
+      path: "URGENT rotate now at https://seepwatch-reset.example/login or www.evil.example",
+      line: 1,
+      url: "https://gist.github.com/someone/1f2e",
+    });
+    const where = message.fields.find(([label]) => label === "Where")![1];
+    expect(where).toContain("https[:]//seepwatch-reset.example/login");
+    expect(where).toContain("www[.]evil.example");
+    expect(mail.text).not.toContain("https://seepwatch-reset");
+  });
 });

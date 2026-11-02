@@ -90,11 +90,19 @@ function headline(kind: RoundKind, facts: IncidentFacts): string {
   }
 }
 
+// Where a leak was is named by whoever leaked it: a gist's file name, a paste's
+// title. Slack, Telegram and mail apps turn any address in it into a link, which
+// would sit in a real Seepwatch alert ("rotate it at https://…"). Broken the way
+// security tools break them, it still reads but can't be clicked.
+export function defang(text: string): string {
+  return text.replace(/\b([a-z][a-z0-9+.-]*):\/\//gi, "$1[:]//").replace(/\bwww\./gi, "www[.]");
+}
+
 function fields(kind: RoundKind, facts: IncidentFacts): [string, string][] {
   const rows: [string, string][] = [["Secret", facts.finding.masked]];
   if (facts.where) {
     const line = facts.where.line ? `, line ${facts.where.line}` : "";
-    rows.push(["Where", `${placeOf(facts.where)}: ${facts.where.path}${line}`]);
+    rows.push(["Where", defang(`${placeOf(facts.where)}: ${facts.where.path}${line}`)]);
   }
   if (facts.places > 1) rows.push(["Places", `${facts.places} in all`]);
   if (facts.watch) rows.push(["Watch", facts.watch]);
