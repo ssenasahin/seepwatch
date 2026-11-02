@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { RateLimitError } from "./github.js";
 import { COMMITS_PER_REPO, COMMITS_PER_SCAN, FIRST_SCAN_DAYS, scanOrg } from "./scan-org.js";
 import { prisma, makeOwner, resetDatabase } from "./test/database.js";
-import { AWS, AWS_2, FakeGithub, sha } from "./test/fake-github.js";
+import { AWS, AWS_2, FakeGithub, sha, STRIPE } from "./test/fake-github.js";
 
 const NOW = new Date("2026-11-01T12:00:00Z");
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
@@ -81,6 +81,18 @@ describe("scanOrg", () => {
     const result = await scanOrg(deps(), watch, [], NOW);
     expect(result.newFindings).toEqual([]);
     expect(await prisma.finding.count()).toBe(0);
+  });
+
+  it("masks a key on an unchanged line next to a new one", async () => {
+    repo("api");
+    commit("api", 1, hoursAgo(2), {
+      ".env": `@@ -1,1 +1,2 @@\n AWS_KEY=${AWS}\n+STRIPE=${STRIPE}`,
+    });
+    const result = await scanOrg(deps(), watch, [], NOW);
+    expect(result.newFindings).toHaveLength(1);
+    const location = await prisma.findingLocation.findFirstOrThrow();
+    expect(location.context).toContain("AWS_KEY=AKIA…");
+    expect(location.context).not.toContain(AWS);
   });
 
   it("adds a location, not a finding, when a known key turns up again", async () => {

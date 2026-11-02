@@ -86,6 +86,7 @@ export async function scanOrg(
             committedAt: commit.committedAt,
             lines: texts,
             numbers: lines.map((l) => l.number),
+            keyPatterns,
           },
           hits,
         );

@@ -123,7 +123,7 @@ describe("the Pastebin feed", () => {
     return async (url) => {
       const key = new URL(url).searchParams.get("i");
       const body = key ? items[key] : typeof list === "string" ? list : JSON.stringify(list);
-      return { status: body === undefined ? 404 : 200, text: async () => body ?? "" };
+      return new Response(body ?? "", { status: body === undefined ? 404 : 200 });
     };
   }
   const paste = (key: string, ago: number, title = "") => ({

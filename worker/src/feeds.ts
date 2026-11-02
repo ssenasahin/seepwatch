@@ -3,7 +3,7 @@
 // every watched domain and address at the same time.
 import type { FindingSource, KeyPattern } from "@seepwatch/db";
 import { describeError } from "./scan-org.js";
-import type { GithubApi } from "./github.js";
+import { readText, type GithubApi } from "./github.js";
 import { noteSeenAgain, openIncidents } from "./incidents.js";
 import { hitsNearMention, mentionPattern } from "./match.js";
 import { recordHits, type RecordDeps } from "./record.js";
@@ -69,7 +69,7 @@ export function gistFeed(github: GithubApi): Feed {
 const PASTEBIN = "https://scrape.pastebin.com";
 const PASTEBIN_POSTS = 250;
 
-export type Fetch = (url: string) => Promise<{ status: number; text(): Promise<string> }>;
+export type Fetch = (url: string) => Promise<Response>;
 
 const httpFetch: Fetch = (url) =>
   fetch(url, {
@@ -111,7 +111,12 @@ export function pastebinFeed(get: Fetch = httpFetch): Feed {
               const item = await get(
                 `${PASTEBIN}/api_scrape_item.php?i=${encodeURIComponent(p.key)}`,
               );
-              return item.status === 200 ? item.text() : null;
+              // The listing's size doesn't bind the body: a paste can be edited after.
+              if (item.status !== 200) {
+                await item.body?.cancel();
+                return null;
+              }
+              return readText(item);
             },
           },
         ],
@@ -208,6 +213,7 @@ export async function readFeed(
                 committedAt: post.createdAt,
                 lines,
                 link: file.link,
+                keyPatterns: w.keyPatterns,
               },
               hits,
             );

@@ -52,6 +52,7 @@ export async function scanSearch(
           ref: result.ref,
           committedAt: null,
           lines,
+          keyPatterns,
         },
         hits,
       );

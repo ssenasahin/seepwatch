@@ -48,6 +48,20 @@ describe("scanSearch", () => {
     expect(location.context).not.toContain(AWS);
   });
 
+  it("masks keys it didn't count in the lines it stores", async () => {
+    // The owner's pattern counts anywhere; the AWS key beside it is too far from a
+    // mention to be theirs, but it's still on the lines shown around the hit.
+    const key = "acme_live_" + "Q".repeat(24);
+    file("notes.md", ["see acme.dev", ...filler(), `token = ${key}`, `aws = ${AWS}`]);
+    await scanSearch(deps(), watch, [
+      { prefix: "acme_live_", charset: "ALNUM", minLength: 20, maxLength: 30 },
+    ]);
+    const location = await prisma.findingLocation.findFirstOrThrow();
+    expect(location.context).toContain("aws = AKIA…");
+    expect(location.context).not.toContain(AWS);
+    expect(location.context).not.toContain(key);
+  });
+
   it("leaves keys far from any mention alone", async () => {
     file("notes.md", ["contact: ops@acme.dev", ...filler(), `aws = ${AWS}`]);
     const result = await scanSearch(deps(), watch, []);

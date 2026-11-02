@@ -1,10 +1,12 @@
 import {
+  detect,
   fingerprint,
   mask,
   Prisma,
   redactedContext,
   type FindingSource,
   type Hit,
+  type KeyPattern,
   type PrismaClient,
 } from "@seepwatch/db";
 
@@ -29,6 +31,9 @@ export interface Sighting {
   numbers?: number[];
   // A link to a line, for sources that aren't files in a repository (gists, pastes).
   link?: (line: number) => string;
+  // The owner's key patterns. The context stored with a hit masks every secret on
+  // its lines, including ones the scan didn't count as this watch's.
+  keyPatterns: KeyPattern[];
 }
 
 const isDuplicate = (err: unknown) =>
@@ -51,6 +56,10 @@ export async function recordHits(
   const created: string[] = [];
   const seenAgain: string[] = [];
   const seen = new Set<string>();
+  // Everything that looks like a secret, not only the hits passed in: a key the scan
+  // filtered out (too far from a mention, on an unchanged line of a patch) can still
+  // sit on the lines shown around one it kept.
+  let everything: Hit[] | null = null;
   for (const hit of hits) {
     const fp = fingerprint(fingerprintKey, hit.secret);
     // The same key twice in one file is one location: the first.
@@ -95,7 +104,11 @@ export async function recordHits(
         path: sighting.path,
         commitSha: /^[0-9a-f]{40}$/.test(sighting.ref) ? sighting.ref : null,
         line,
-        context: redactedContext(sighting.lines, hits, hit.lineIndex),
+        context: redactedContext(
+          sighting.lines,
+          (everything ??= [...hits, ...detect(sighting.lines, sighting.keyPatterns)]),
+          hit.lineIndex,
+        ),
         committedAt: sighting.committedAt,
       },
       // Seen here before: the location is already on record.
