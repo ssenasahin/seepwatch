@@ -72,7 +72,7 @@ describe("GET /api/incidents", () => {
         detectorLabel: "AWS access key",
         masked: "AKIA…MNOP",
         locationCount: 1,
-        lastLocation: { repository: "acme/api", path: "f1.env" },
+        lastLocation: { source: "GITHUB_COMMIT", repository: "acme/api", path: "f1.env" },
       },
     });
     expect(JSON.stringify(all.body)).not.toContain("fp-");

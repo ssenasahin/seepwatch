@@ -3,6 +3,7 @@ import {
   isClosed,
   needsReason,
   verifyRespond,
+  type FindingSource,
   type IncidentStatus,
   type PrismaClient,
 } from "@seepwatch/db";
@@ -51,7 +52,7 @@ const incidentInclude = {
       locations: {
         orderBy: { seenAt: "desc" as const },
         take: 1,
-        select: { repository: true, path: true, line: true, url: true },
+        select: { source: true, repository: true, path: true, line: true, url: true },
       },
       _count: { select: { locations: true } },
     },
@@ -76,7 +77,13 @@ type Loaded = {
     firstSeenAt: Date;
     lastSeenAt: Date;
     watch: { id: string; kind: string; value: string; label: string | null } | null;
-    locations: { repository: string; path: string; line: number | null; url: string }[];
+    locations: {
+      source: FindingSource;
+      repository: string;
+      path: string;
+      line: number | null;
+      url: string;
+    }[];
     _count: { locations: number };
   };
 };
