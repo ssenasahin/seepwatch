@@ -227,9 +227,21 @@ export function httpGithub(token?: string): GithubApi {
 }
 
 // The body as text, unless it's too big or binary (a NUL byte gives that away).
-async function readText(res: Response): Promise<string | null> {
-  if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) return null;
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length > MAX_FILE_BYTES || bytes.includes(0)) return null;
-  return new TextDecoder().decode(bytes);
+// Counted as it arrives: content-length can be missing (chunked) or the compressed
+// size, and a body read whole before its size is checked could be any size.
+export async function readText(res: Response): Promise<string | null> {
+  if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) {
+    await res.body?.cancel();
+    return null;
+  }
+  if (!res.body) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.length;
+    // Leaving the loop cancels the rest of the download.
+    if (size > MAX_FILE_BYTES || chunk.includes(0)) return null;
+    chunks.push(chunk);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
 }
