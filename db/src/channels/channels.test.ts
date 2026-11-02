@@ -152,6 +152,16 @@ describe("guardedTransport", () => {
       req.on("data", (c) => (body += c));
       req.on("end", () => {
         seen = { headers: req.headers, body };
+        if (req.url === "/endless") {
+          // Answers forever, until the client hangs up.
+          res.writeHead(200);
+          const more = () => {
+            while (res.write("x".repeat(64 * 1024)));
+          };
+          res.on("drain", more);
+          more();
+          return;
+        }
         res.writeHead(req.url === "/redirect" ? 302 : 200, { location: "http://169.254.169.254/" });
         res.end("fine");
       });
@@ -168,6 +178,13 @@ describe("guardedTransport", () => {
     });
     expect(res).toEqual({ status: 200, text: "fine" });
     expect(seen).toMatchObject({ body: '{"a":1}', headers: { "x-test": "1" } });
+  });
+
+  it("reads only the start of an endless answer", async () => {
+    const transport = guardedTransport(async () => ["127.0.0.1"]);
+    const res = await transport(`http://hooks.example.com:${port}/endless`, "{}", {});
+    expect(res.status).toBe(200);
+    expect(res.text).toHaveLength(2_000);
   });
 
   it("doesn't follow redirects", async () => {

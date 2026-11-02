@@ -28,7 +28,7 @@ export function guardedTransport(resolve: Resolve = (host) => resolvePublicHost(
         dispatcher: agent,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      const text = (await res.body.text()).slice(0, MAX_TEXT);
+      const text = await readSome(res.body, MAX_TEXT);
       return { status: res.statusCode, text };
     } catch (err) {
       throw new DeliveryError(describe(err));
@@ -36,6 +36,21 @@ export function guardedTransport(resolve: Resolve = (host) => resolvePublicHost(
       void agent.destroy();
     }
   };
+}
+
+// The start of a response, and no more: the URL is the owner's, and so is how much
+// it sends back. Reading all of it first would let one endpoint fill the worker's
+// memory and hold up every other alert.
+async function readSome(body: AsyncIterable<Uint8Array>, limit: number): Promise<string> {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  // Leaving the loop early closes the stream.
+  for await (const chunk of body) {
+    chunks.push(chunk);
+    size += chunk.length;
+    if (size >= limit) break;
+  }
+  return Buffer.concat(chunks).toString("utf8").slice(0, limit);
 }
 
 function describe(err: unknown): string {
