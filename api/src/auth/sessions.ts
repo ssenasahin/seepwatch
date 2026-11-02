@@ -41,9 +41,11 @@ export type RotateResult =
   | { kind: "invalid" }
   | { kind: "reused"; userId: string };
 
-// Swaps the session's refresh secret for a new one. Presenting a secret that was
-// already rotated away means two parties hold this session's token: one of them
-// stole it. We cannot tell which, so every session of that user is ended.
+// Swaps the session's refresh secret for a new one. Presenting the secret that was
+// just rotated away means two parties hold this session's token: one of them stole
+// it. We cannot tell which, so every session of that user is ended. Any other wrong
+// secret is only refused: knowing a session's id (it's in the access token) must not
+// be enough to sign someone out everywhere.
 export async function rotateSession(
   prisma: PrismaClient,
   sessionId: string,
@@ -57,8 +59,11 @@ export async function rotateSession(
 
   const presentedHash = sha256(secret);
   if (!hashesMatch(presentedHash, session.refreshTokenHash)) {
-    await revokeAllSessions(prisma, session.userId);
-    return { kind: "reused", userId: session.userId };
+    if (session.previousTokenHash && hashesMatch(presentedHash, session.previousTokenHash)) {
+      await revokeAllSessions(prisma, session.userId);
+      return { kind: "reused", userId: session.userId };
+    }
+    return { kind: "invalid" };
   }
 
   const next = newRefreshSecret();
@@ -68,6 +73,7 @@ export async function rotateSession(
     where: { id: sessionId, refreshTokenHash: presentedHash, revokedAt: null },
     data: {
       refreshTokenHash: next.hash,
+      previousTokenHash: presentedHash,
       lastUsedAt: new Date(),
       ip: client.ip,
       userAgent: client.userAgent?.slice(0, 512),
