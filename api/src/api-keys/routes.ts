@@ -6,7 +6,7 @@ import { authOf } from "../auth/middleware.js";
 import { sha256 } from "../auth/tokens.js";
 import { HttpError, validate } from "../http.js";
 import { SUSPENDED } from "../auth/shared.js";
-import { assertRoomFor } from "../plans.js";
+import { withRoomFor } from "../plans.js";
 
 const KEY_PREFIX = "spw_sk_";
 // Writing last_used_at on every request would turn reads into writes; once a minute
@@ -49,6 +49,18 @@ export function requireApiKey(prisma: PrismaClient): RequestHandler {
   };
 }
 
+// For the routes a script has reason to use: a key if the request brings one, the
+// signed-in session otherwise. Keys can't manage keys, the team or the account, so a
+// leaked key can be revoked and stays revoked.
+export function sessionOrApiKey(session: RequestHandler, apiKey: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    const header = req.get("authorization") ?? "";
+    return header.startsWith(`Bearer ${KEY_PREFIX}`)
+      ? apiKey(req, res, next)
+      : session(req, res, next);
+  };
+}
+
 export function apiKeyRouter(prisma: PrismaClient, authenticate: RequestHandler) {
   const router = Router();
   router.use(authenticate);
@@ -69,17 +81,18 @@ export function apiKeyRouter(prisma: PrismaClient, authenticate: RequestHandler)
       z.object({ name: z.string().trim().min(1, "Name the key after what uses it").max(100) }),
       req.body,
     );
-    await assertRoomFor(prisma, userId, "apiKeys");
     const key = `${KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
-    const created = await prisma.apiKey.create({
-      data: {
-        ownerId: userId,
-        name,
-        keyHash: sha256(key),
-        prefix: key.slice(0, KEY_PREFIX.length + 4),
-      },
-      select: keyFields,
-    });
+    const created = await withRoomFor(prisma, userId, "apiKeys", (tx) =>
+      tx.apiKey.create({
+        data: {
+          ownerId: userId,
+          name,
+          keyHash: sha256(key),
+          prefix: key.slice(0, KEY_PREFIX.length + 4),
+        },
+        select: keyFields,
+      }),
+    );
     // The only time the key itself leaves the server.
     res.status(201).json({ key: created, secret: key });
   });

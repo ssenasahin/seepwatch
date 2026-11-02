@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@seepwatch/db";
+import type { Prisma, PrismaClient } from "@seepwatch/db";
 import { HttpError } from "./http.js";
 
 export interface Limits {
@@ -24,7 +24,9 @@ const limitFields = {
 } as const;
 
 // The account's own plan if an admin gave it one, otherwise the default plan.
-export async function limitsOf(prisma: PrismaClient, userId: string): Promise<Limits> {
+type Db = Prisma.TransactionClient;
+
+export async function limitsOf(prisma: Db, userId: string): Promise<Limits> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { plan: { select: limitFields } },
@@ -40,35 +42,38 @@ export async function limitsOf(prisma: PrismaClient, userId: string): Promise<Li
 const COUNTERS = {
   watches: {
     limit: (l: Limits) => l.maxWatches,
-    count: (p: PrismaClient, ownerId: string) => p.watch.count({ where: { ownerId } }),
+    count: (p: Db, ownerId: string) => p.watch.count({ where: { ownerId } }),
     message: (n: number) => `Your plan allows up to ${n} watches`,
   },
   channels: {
     limit: (l: Limits) => l.maxChannels,
-    count: (p: PrismaClient, ownerId: string) =>
-      p.notificationChannel.count({ where: { ownerId } }),
+    count: (p: Db, ownerId: string) => p.notificationChannel.count({ where: { ownerId } }),
     message: (n: number) => `Your plan allows up to ${n} channels`,
   },
   apiKeys: {
     limit: (l: Limits) => l.maxApiKeys,
-    count: (p: PrismaClient, ownerId: string) =>
-      p.apiKey.count({ where: { ownerId, revokedAt: null } }),
+    count: (p: Db, ownerId: string) => p.apiKey.count({ where: { ownerId, revokedAt: null } }),
     message: (n: number) =>
       `Your plan allows up to ${n} active keys. Revoke one you no longer use.`,
   },
 };
 
-// Refuses to add one more of something once the plan's limit is reached.
-export async function assertRoomFor(
+// Adds one more of something, unless the plan's limit is reached. Counting and
+// adding happen in one transaction, holding a lock on this owner's count, so twenty
+// requests at once can't all see room for one more.
+export async function withRoomFor<T>(
   prisma: PrismaClient,
   userId: string,
   what: keyof typeof COUNTERS,
-): Promise<Limits> {
-  const limits = await limitsOf(prisma, userId);
-  const counter = COUNTERS[what];
-  const max = counter.limit(limits);
-  if ((await counter.count(prisma, userId)) >= max) {
-    throw new HttpError(403, counter.message(max));
-  }
-  return limits;
+  add: (tx: Db) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${what}:${userId}`}))`;
+    const counter = COUNTERS[what];
+    const max = counter.limit(await limitsOf(tx, userId));
+    if ((await counter.count(tx, userId)) >= max) {
+      throw new HttpError(403, counter.message(max));
+    }
+    return add(tx);
+  });
 }

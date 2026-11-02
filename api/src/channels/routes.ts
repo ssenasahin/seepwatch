@@ -18,7 +18,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { authOf } from "../auth/middleware.js";
 import { HttpError, validate } from "../http.js";
-import { assertRoomFor } from "../plans.js";
+import { withRoomFor } from "../plans.js";
 import { checkWebhookUrl } from "./webhook-url.js";
 
 // A secret left out (null) on an edit keeps the stored one, as with API headers.
@@ -150,16 +150,17 @@ export function channelRouter({
   router.post("/", async (req, res) => {
     const { userId } = authOf(req);
     const input = validate(createSchema, req.body);
-    await assertRoomFor(prisma, userId, "channels");
     const config = await settle(input.type, input.settings);
-    const channel = await prisma.notificationChannel.create({
-      data: {
-        ownerId: userId,
-        type: input.type,
-        name: input.name,
-        config: sealConfig(config, encryptionKey),
-      },
-    });
+    const channel = await withRoomFor(prisma, userId, "channels", (tx) =>
+      tx.notificationChannel.create({
+        data: {
+          ownerId: userId,
+          type: input.type,
+          name: input.name,
+          config: sealConfig(config, encryptionKey),
+        },
+      }),
+    );
     // The only time a webhook's signing secret leaves the server.
     const signingSecret =
       input.type === "WEBHOOK" ? (config as ConfigOf["WEBHOOK"]).secret : undefined;

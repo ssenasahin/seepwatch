@@ -260,4 +260,19 @@ describe("watches", () => {
     await prisma.user.update({ where: { id: s.userId }, data: { planId: null } });
     await prisma.plan.delete({ where: { id: plan.id } });
   });
+
+  it("stay limited when many are added at once", async () => {
+    const s = await signedIn();
+    const plan = await prisma.plan.create({
+      data: { name: "Tiny", maxWatches: 2, maxChannels: 1, maxApiKeys: 1 },
+    });
+    await prisma.user.update({ where: { id: s.userId }, data: { planId: plan.id } });
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) => add(s, { kind: "GITHUB_ORG", value: `org-${i}` })),
+    );
+    expect(results.filter((r) => r.status === 201)).toHaveLength(2);
+    expect(await prisma.watch.count({ where: { ownerId: s.userId } })).toBe(2);
+    await prisma.user.update({ where: { id: s.userId }, data: { planId: null } });
+    await prisma.plan.delete({ where: { id: plan.id } });
+  });
 });

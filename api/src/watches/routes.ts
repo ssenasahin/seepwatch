@@ -19,7 +19,7 @@ import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { authOf } from "../auth/middleware.js";
 import { HttpError, validate } from "../http.js";
-import { assertRoomFor } from "../plans.js";
+import { withRoomFor } from "../plans.js";
 import { ownTeam } from "../team/routes.js";
 import { coveringDomain, parseDomain, parseEmail, parseGithubOrg, type Parsed } from "./values.js";
 
@@ -216,13 +216,14 @@ export function watchRouter({ prisma, authenticate, resolveTxt, fetchGithubFile 
   router.post("/", async (req, res) => {
     const { userId } = authOf(req);
     const input = validate(createSchema, req.body);
-    await assertRoomFor(prisma, userId, "watches");
     const data = await build(userId, input);
     try {
-      const watch = await prisma.watch.create({
-        data: { ownerId: userId, kind: input.kind, label: input.label || null, ...data },
-        include,
-      });
+      const watch = await withRoomFor(prisma, userId, "watches", (tx) =>
+        tx.watch.create({
+          data: { ownerId: userId, kind: input.kind, label: input.label || null, ...data },
+          include,
+        }),
+      );
       res.status(201).json({ watch: present(watch) });
     } catch (err) {
       if (isDuplicate(err)) throw valueError("You're already watching this");
