@@ -81,6 +81,9 @@ function privateKeyBlock(lines: string[], from: number): string {
   return block.join("\n");
 }
 
+// Minified files can put a megabyte on one line; nobody pastes a key there by hand.
+const MAX_LINE = 20_000;
+
 // Every secret in the lines, by the built-in detectors and the owner's key patterns.
 // A secret seen twice in the same lines is reported twice; recording dedupes.
 export function detect(lines: string[], keyPatterns: KeyPattern[] = []): Hit[] {
@@ -90,8 +93,7 @@ export function detect(lines: string[], keyPatterns: KeyPattern[] = []): Hit[] {
   }));
   const hits: Hit[] = [];
   lines.forEach((line, lineIndex) => {
-    // Minified files can put a megabyte on one line; nobody pastes a key there by hand.
-    if (line.length > 20_000) return;
+    if (line.length > MAX_LINE) return;
     for (const { id, pattern } of [...DETECTORS, ...custom]) {
       for (const m of line.matchAll(pattern)) {
         const start = m.index;
@@ -141,17 +143,56 @@ export function redactedContext(lines: string[], hits: Hit[], lineIndex: number)
   const out: string[] = [];
   for (let i = from; i < to; i++) {
     let line = lines[i]!;
+    // detect() never looked inside it, so nothing on it is known to be safe to show.
+    if (line.length > MAX_LINE) {
+      out.push("[long line omitted]");
+      continue;
+    }
     // Right to left, so earlier positions stay valid as the line changes length.
-    const onLine = hits.filter((h) => h.lineIndex === i).sort((a, b) => b.start - a.start);
-    for (const h of onLine) {
-      const shown = h.detector === "private-key" ? "-----BEGIN PRIVATE KEY----- …" : mask(h.secret);
-      line = line.slice(0, h.start) + shown + line.slice(h.end);
+    for (const s of spans(
+      line,
+      hits.filter((h) => h.lineIndex === i),
+    ).reverse()) {
+      const shown = s.privateKey
+        ? "-----BEGIN PRIVATE KEY----- …"
+        : mask(line.slice(s.start, s.end));
+      line = line.slice(0, s.start) + shown + line.slice(s.end);
     }
     // Inside a private key block, the body lines are the key itself.
     if (insidePrivateKey(lines, hits, i)) line = "[private key redacted]";
     out.push(line.length > CONTEXT_WIDTH ? `${line.slice(0, CONTEXT_WIDTH)}…` : line);
   }
   return out.join("\n");
+}
+
+interface Span {
+  start: number;
+  end: number;
+  privateKey: boolean;
+}
+
+// What to hide on one line, overlaps merged so no part of a secret survives a
+// replacement shifting the line under another.
+function spans(line: string, hits: Hit[]): Span[] {
+  const raw = hits
+    .map((h) => {
+      if (h.detector !== "private-key") return { start: h.start, end: h.end, privateKey: false };
+      // A key written on one line ("-----BEGIN…-----\nMIIE…", as in a service
+      // account file) carries its body after the header: hide up to its end marker.
+      const endMarker = /-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/.exec(line.slice(h.end));
+      const end = endMarker ? h.end + endMarker.index + endMarker[0].length : line.length;
+      return { start: h.start, end, privateKey: true };
+    })
+    .sort((a, b) => a.start - b.start);
+  const merged: Span[] = [];
+  for (const s of raw) {
+    const last = merged.at(-1);
+    if (last && s.start < last.end) {
+      last.end = Math.max(last.end, s.end);
+      last.privateKey ||= s.privateKey;
+    } else merged.push({ ...s });
+  }
+  return merged;
 }
 
 function insidePrivateKey(lines: string[], hits: Hit[], i: number): boolean {

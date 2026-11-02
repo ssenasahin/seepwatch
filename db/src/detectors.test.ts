@@ -96,6 +96,32 @@ describe("what is kept", () => {
     expect(context).not.toContain(GITHUB);
   });
 
+  it("masks every secret it's given, overlapping or not", () => {
+    const lines = [`K=${AWS} G=${GITHUB}`];
+    const hits = detect(lines);
+    // The same hit twice, as when a caller merges two lists.
+    const context = redactedContext(lines, [...hits, ...hits], 0);
+    expect(context).toBe("K=AKIA…MNOP G=ghp_…cdef");
+  });
+
+  it("hides a private key written on one line", () => {
+    const body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC".repeat(3);
+    // As a service account file holds it: one JSON string, with \n escapes.
+    const lines = [
+      `  "private_key": "${BEGIN()}\\n${body}\\n${END()}\\n",`,
+      `  "client_email": "x"`,
+    ];
+    const context = redactedContext(lines, detect(lines), 0);
+    expect(context).not.toContain(body.slice(0, 16));
+    expect(context).toContain('"private_key": "-----BEGIN PRIVATE KEY----- …\\n",');
+  });
+
+  it("leaves out lines too long to have been scanned", () => {
+    const lines = [`K=${AWS};${"x".repeat(25_000)}`, `GH=${GITHUB}`];
+    const context = redactedContext(lines, detect(lines), 1);
+    expect(context).toBe("[long line omitted]\nGH=ghp_…cdef");
+  });
+
   it("never shows a private key's body", () => {
     const lines = [BEGIN(), "c2VjcmV0", END()];
     const context = redactedContext(lines, detect(lines), 0);
