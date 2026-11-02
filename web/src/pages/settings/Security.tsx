@@ -37,6 +37,7 @@ function TwoFactorCard() {
   const { updateSession } = useAuth();
   const [setup, setSetup] = useState<Setup | null>(null);
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
 
   const start = useMutation({
@@ -45,14 +46,15 @@ function TwoFactorCard() {
   });
 
   const verify = useMutation({
-    mutationFn: (code: string) =>
+    mutationFn: () =>
       api<SessionBody & { backupCodes: string[] }>("/auth/2fa/verify", {
         method: "POST",
-        body: { code },
+        body: { code, password },
       }),
     onSuccess: (body) => {
       setBackupCodes(body.backupCodes);
       setSetup(null);
+      setPassword("");
       updateSession(body);
     },
   });
@@ -80,7 +82,7 @@ function TwoFactorCard() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    verify.mutate(code);
+    verify.mutate();
   };
 
   return (
@@ -146,11 +148,27 @@ function TwoFactorCard() {
                   className="code-input"
                   error={
                     verify.error instanceof ApiError
-                      ? (verify.error.fieldError("code") ?? verify.error.message)
+                      ? (verify.error.fieldError("code") ??
+                        (verify.error.fieldError("password") ? undefined : verify.error.message))
                       : undefined
                   }
                 />
-                <button className="btn btn-primary" disabled={code.length < 6 || verify.isPending}>
+                <TextField
+                  label="Your password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  error={
+                    verify.error instanceof ApiError
+                      ? verify.error.fieldError("password")
+                      : undefined
+                  }
+                />
+                <button
+                  className="btn btn-primary"
+                  disabled={code.length < 6 || !password || verify.isPending}
+                >
                   {verify.isPending ? "Checking…" : "Turn on two-factor"}
                 </button>
               </form>
