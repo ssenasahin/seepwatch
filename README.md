@@ -2,7 +2,7 @@
 
 Find your leaked secrets before someone else does.
 
-Seepwatch will scan GitHub organizations, public repositories and paste sites for your domains, your
+Seepwatch scans GitHub organizations, public repositories and paste sites for your domains, your
 email addresses and the shapes of your API keys. Each thing it finds becomes an incident, and the
 incident keeps escalating until someone says the secret has been revoked. Acknowledging it is not
 enough: a leaked key stays dangerous until it stops working.
@@ -16,12 +16,15 @@ The foundation runs: sign-up and sign-in with two-factor, teams and invites, Sla
 webhook channels, escalation policies, API keys and the admin panel with its audit log. You can add
 watches and prove they're yours. The worker scans GitHub, public gists and (with a Pastebin Pro
 account) Pastebin for them, opens an incident for each new leak and keeps alerting until someone
-marks it revoked. Alerts link to a page where anyone who got
-one can say "I'm on it" or "it's revoked" without signing in. The overview counts active leaks and
-lists the latest findings.
+marks it revoked. Alerts link to a page where anyone who got one can say "I'm on it" or "it's
+revoked" without signing in.
 
-What comes next: the pages for findings and incidents, where a leak can also be closed as a false
-positive or an accepted risk. Until then the API does it: `POST /api/incidents/:id/actions`.
+In the dashboard, the overview counts active leaks and lists the latest findings. The Leaks page
+lists every incident, active or closed, and each one has its own page: where the secret was seen
+(with the surrounding lines, the secret masked), the full timeline, and the buttons to take it on,
+mark it revoked or close it as a false positive or an accepted risk. Those last two ask for a reason.
+
+All six planned phases are done.
 
 ## Watches
 
@@ -166,6 +169,10 @@ db/                   Prisma schema, migrations and the code api and worker shar
   src/detectors.ts    the detectors, masking and fingerprints
   src/verification.ts DNS TXT and GitHub file verification
 web/                  React dashboard
+  src/pages/watches/  adding watches and proving them
+  src/pages/incidents/ the Leaks list, one leak's page and the page alerts link to
+  src/pages/alerts/   channels, escalation policies and the team
+  src/pages/admin/    the admin panel
 deployments/          production compose file and Caddy config
 ```
 
