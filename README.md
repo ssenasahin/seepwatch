@@ -10,6 +10,26 @@ enough: a leaked key stays dangerous until it stops working.
 It is built on the same foundation as [Lanternly](https://github.com/ssenasahin/lanternly): the
 accounts, team, alert channels, escalation policies, signed links and admin panel come from there.
 
+## Screenshots
+
+The leaks list: every secret found, where it was, and who is dealing with it.
+
+![The Leaks page, listing an open AWS key, a Stripe key someone is on, and a revoked GitHub token](docs/screenshots/leaks.png)
+
+One leak: the lines around it with the secret masked, and its timeline. It keeps alerting until
+someone marks it revoked.
+
+![A single leak's page, with the masked AWS key, where it was committed, and its alert timeline](docs/screenshots/leak.png)
+
+<details>
+<summary>The overview and the watches</summary>
+
+![The overview, with active leaks, watches and the latest findings](docs/screenshots/overview.png)
+
+![The Watches page, with a verified domain, an address on it, a GitHub organization and a key pattern](docs/screenshots/watches.png)
+
+</details>
+
 ## Status
 
 The foundation runs: sign-up and sign-in with two-factor, teams and invites, Slack, Telegram and
