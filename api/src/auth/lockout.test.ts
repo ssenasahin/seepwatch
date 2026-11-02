@@ -5,15 +5,15 @@ const now = new Date("2026-10-27T10:00:00Z");
 
 describe("afterFailedSignIn", () => {
   it("keeps counting below the limit", () => {
-    expect(afterFailedSignIn(MAX_FAILED_SIGN_INS - 1, now)).toEqual({
-      failedLogins: MAX_FAILED_SIGN_INS - 1,
+    expect(afterFailedSignIn(MAX_FAILED_SIGN_INS - 1, now, MAX_FAILED_SIGN_INS)).toEqual({
+      failures: MAX_FAILED_SIGN_INS - 1,
       lockedUntil: null,
     });
   });
 
-  it("locks for 15 minutes on the fifth failure and resets the count", () => {
-    const next = afterFailedSignIn(MAX_FAILED_SIGN_INS, now);
-    expect(next.failedLogins).toBe(0);
+  it("locks for 15 minutes on reaching the limit and resets the count", () => {
+    const next = afterFailedSignIn(MAX_FAILED_SIGN_INS, now, MAX_FAILED_SIGN_INS);
+    expect(next.failures).toBe(0);
     expect(next.lockedUntil?.getTime()).toBe(now.getTime() + LOCK_DURATION_MS);
   });
 });

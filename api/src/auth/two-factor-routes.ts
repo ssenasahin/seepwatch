@@ -2,7 +2,6 @@ import { decryptSecret, encryptSecret } from "@seepwatch/db";
 import { Router } from "express";
 import { z } from "zod";
 import { HttpError, validate } from "../http.js";
-import { isLocked } from "./lockout.js";
 import { authOf, requireAuth } from "./middleware.js";
 import { verifyPassword } from "./password.js";
 import {
@@ -10,7 +9,9 @@ import {
   clearFailedSignIns,
   issueSession,
   publicUser,
-  recordFailedSignIn,
+  recordFailedCode,
+  recordFailedPassword,
+  signInLocked,
   type AuthDeps,
 } from "./shared.js";
 import { signAccessToken, verifyChallengeToken } from "./tokens.js";
@@ -68,7 +69,7 @@ export function twoFactorRoutes(deps: AuthDeps) {
     if (user.totpEnabledAt) throw new HttpError(409, "Two-factor sign-in is already on");
     if (!user.totpSecret) throw new HttpError(400, "Start two-factor setup first");
     if (!(await verifyPassword(user.passwordHash, password))) {
-      await recordFailedSignIn(prisma, user.id);
+      await recordFailedPassword(prisma, user.id, req.ip);
       throw new HttpError(400, "That password isn't right", {
         password: ["Enter the password you sign in with."],
       });
@@ -122,7 +123,7 @@ export function twoFactorRoutes(deps: AuthDeps) {
       throw new HttpError(401, "This sign-in attempt has expired. Start again.");
     }
     // Six digits are guessable with enough tries, so wrong codes count toward the lock.
-    if (isLocked(user.lockedUntil, new Date())) throw new HttpError(401, CODE_REJECTED);
+    if (await signInLocked(prisma, user, req.ip)) throw new HttpError(401, CODE_REJECTED);
 
     let accepted = false;
     if (body.code) {
@@ -146,11 +147,11 @@ export function twoFactorRoutes(deps: AuthDeps) {
     }
 
     if (!accepted) {
-      await recordFailedSignIn(prisma, user.id);
+      await recordFailedCode(prisma, user.id);
       throw new HttpError(401, CODE_REJECTED);
     }
 
-    await clearFailedSignIns(prisma, user);
+    await clearFailedSignIns(prisma, user, req.ip);
     res.json(await issueSession(deps, req, res, user, true));
   });
 

@@ -4,7 +4,13 @@ import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import type { Env } from "../env.js";
 import { HttpError } from "../http.js";
-import { afterFailedSignIn } from "./lockout.js";
+import {
+  ACCOUNT_FAILURE_LIMIT,
+  afterFailedSignIn,
+  CODE_FAILURE_WEIGHT,
+  isLocked,
+  MAX_FAILED_SIGN_INS,
+} from "./lockout.js";
 import { createSession, type ClientInfo } from "./sessions.js";
 import { signAccessToken } from "./tokens.js";
 
@@ -66,21 +72,70 @@ export async function issueSession(
   return { accessToken, user: publicUser(user) };
 }
 
-// Counts a failed password or code, locking the account on the fifth in a row.
-// Incrementing in the database keeps the count right under concurrent attempts.
-export async function recordFailedSignIn(prisma: PrismaClient, userId: string): Promise<void> {
+// req.ip is undefined only for a socket already gone; those share one bucket.
+const addressOf = (ip: string | undefined) => ip ?? "unknown";
+
+// Locked for this address, or as a whole.
+export async function signInLocked(
+  prisma: PrismaClient,
+  user: User,
+  ip: string | undefined,
+  now = new Date(),
+): Promise<boolean> {
+  if (isLocked(user.lockedUntil, now)) return true;
+  const throttle = await prisma.signInThrottle.findUnique({
+    where: { userId_ip: { userId: user.id, ip: addressOf(ip) } },
+  });
+  return isLocked(throttle?.lockedUntil ?? null, now);
+}
+
+// A wrong password: locks this address out of the account on its fifth, and counts
+// toward the account's own, much higher, limit. Incrementing in the database keeps
+// the counts right under concurrent attempts.
+export async function recordFailedPassword(
+  prisma: PrismaClient,
+  userId: string,
+  ip: string | undefined,
+): Promise<void> {
+  const where = { userId_ip: { userId, ip: addressOf(ip) } };
+  const { failures } = await prisma.signInThrottle.upsert({
+    where,
+    create: { userId, ip: addressOf(ip), failures: 1 },
+    update: { failures: { increment: 1 } },
+  });
+  const next = afterFailedSignIn(failures, new Date(), MAX_FAILED_SIGN_INS);
+  if (next.lockedUntil) await prisma.signInThrottle.update({ where, data: next });
+  await countAgainstAccount(prisma, userId, 1);
+}
+
+// A wrong two-factor code or backup code.
+export async function recordFailedCode(prisma: PrismaClient, userId: string): Promise<void> {
+  await countAgainstAccount(prisma, userId, CODE_FAILURE_WEIGHT);
+}
+
+async function countAgainstAccount(prisma: PrismaClient, userId: string, by: number) {
   const { failedLogins } = await prisma.user.update({
     where: { id: userId },
-    data: { failedLogins: { increment: 1 } },
+    data: { failedLogins: { increment: by } },
     select: { failedLogins: true },
   });
-  const next = afterFailedSignIn(failedLogins, new Date());
+  const next = afterFailedSignIn(failedLogins, new Date(), ACCOUNT_FAILURE_LIMIT);
   if (next.lockedUntil) {
-    await prisma.user.update({ where: { id: userId }, data: next });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { failedLogins: next.failures, lockedUntil: next.lockedUntil },
+    });
   }
 }
 
-export async function clearFailedSignIns(prisma: PrismaClient, user: User): Promise<void> {
+// After a sign-in that worked: this address starts clean, and so does the account.
+// Other addresses keep their locks; the owner signing in says nothing about them.
+export async function clearFailedSignIns(
+  prisma: PrismaClient,
+  user: User,
+  ip: string | undefined,
+): Promise<void> {
+  await prisma.signInThrottle.deleteMany({ where: { userId: user.id, ip: addressOf(ip) } });
   if (user.failedLogins > 0 || user.lockedUntil) {
     await prisma.user.update({
       where: { id: user.id },

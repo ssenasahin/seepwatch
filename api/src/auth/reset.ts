@@ -90,6 +90,8 @@ export function resetRoutes({ env, prisma, mailer }: AuthDeps) {
         where: { userId: record.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
+      // Proving the inbox clears every address's lock too.
+      prisma.signInThrottle.deleteMany({ where: { userId: record.userId } }),
     ]);
 
     res.status(204).end();

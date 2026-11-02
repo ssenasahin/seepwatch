@@ -82,22 +82,25 @@ export function userAdminRouter({ prisma, mailer, webOrigin }: UserAdminDeps) {
   async function detail(id: string) {
     const user = await findUser(id);
     const now = new Date();
-    const [channels, apiKeys, liveSessions, lastSession, limits, history] = await Promise.all([
-      prisma.notificationChannel.count({ where: { ownerId: id } }),
-      prisma.apiKey.count({ where: { ownerId: id, revokedAt: null } }),
-      prisma.session.count({ where: { userId: id, revokedAt: null, expiresAt: { gt: now } } }),
-      prisma.session.findFirst({
-        where: { userId: id },
-        orderBy: { createdAt: "desc" },
-        select: { createdAt: true },
-      }),
-      limitsOf(prisma, id),
-      prisma.auditLog.findMany({
-        where: { targetId: id },
-        orderBy: { id: "desc" },
-        take: 20,
-      }),
-    ]);
+    const [channels, apiKeys, liveSessions, lastSession, limits, history, lockedAddresses] =
+      await Promise.all([
+        prisma.notificationChannel.count({ where: { ownerId: id } }),
+        prisma.apiKey.count({ where: { ownerId: id, revokedAt: null } }),
+        prisma.session.count({ where: { userId: id, revokedAt: null, expiresAt: { gt: now } } }),
+        prisma.session.findFirst({
+          where: { userId: id },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true },
+        }),
+        limitsOf(prisma, id),
+        prisma.auditLog.findMany({
+          where: { targetId: id },
+          orderBy: { id: "desc" },
+          take: 20,
+        }),
+        // Addresses shut out of this account after wrong passwords from each.
+        prisma.signInThrottle.count({ where: { userId: id, lockedUntil: { gt: now } } }),
+      ]);
     return {
       user: {
         ...presentRow(user, now),
@@ -106,6 +109,7 @@ export function userAdminRouter({ prisma, mailer, webOrigin }: UserAdminDeps) {
         liveSessions,
         lastSignInAt: lastSession?.createdAt ?? null,
         limits,
+        lockedAddresses,
       },
       history: history.map(presentEntry),
     };
@@ -203,11 +207,16 @@ export function userAdminRouter({ prisma, mailer, webOrigin }: UserAdminDeps) {
     const actor = adminOf(req);
     const { id } = validate(idParams, req.params);
     const user = await findUser(id);
-    if (!user.lockedUntil || user.lockedUntil <= new Date()) {
+    const now = new Date();
+    const lockedAddresses = await prisma.signInThrottle.count({
+      where: { userId: id, lockedUntil: { gt: now } },
+    });
+    if ((!user.lockedUntil || user.lockedUntil <= now) && lockedAddresses === 0) {
       throw new HttpError(409, "This account isn't locked");
     }
     await prisma.$transaction([
       prisma.user.update({ where: { id }, data: { failedLogins: 0, lockedUntil: null } }),
+      prisma.signInThrottle.deleteMany({ where: { userId: id } }),
       audit(prisma, actor, "user.unlock", { id, label: user.email }),
     ]);
     res.json(await detail(id));
