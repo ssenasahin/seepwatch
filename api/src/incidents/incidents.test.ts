@@ -1,4 +1,4 @@
-import { ACK_REMINDER_MS, respondLink } from "@seepwatch/db";
+import { ACK_REMINDER_MS, RESPOND_LINK_DAYS, respondLink } from "@seepwatch/db";
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { makeApp, prisma, resetDatabase, signUp, testEnv } from "../test/helpers.js";
@@ -48,9 +48,13 @@ async function incident(ownerId: string, round = 1, n = 1) {
 }
 
 // The page behind an alert's link, as the browser would call it.
-function linkParts(incidentId: string, by: string) {
-  const url = new URL(respondLink(testEnv.WEB_ORIGIN, KEY, incidentId, by));
-  return { by: url.searchParams.get("by")!, sig: url.searchParams.get("sig")! };
+function linkParts(incidentId: string, by: string, sentAt = new Date()) {
+  const url = new URL(respondLink(testEnv.WEB_ORIGIN, KEY, incidentId, by, sentAt));
+  return {
+    by: url.searchParams.get("by")!,
+    exp: url.searchParams.get("exp")!,
+    sig: url.searchParams.get("sig")!,
+  };
 }
 
 describe("GET /api/incidents", () => {
@@ -237,6 +241,53 @@ describe("/api/respond", () => {
         action: "REVOKE",
       });
     expect(forged.status).toBe(404);
+  });
+
+  it("stops working once the link runs out", async () => {
+    const s = await signedIn();
+    const i = await incident(s.userId);
+    const old = linkParts(
+      i.id,
+      `u:${s.userId}`,
+      new Date(Date.now() - (RESPOND_LINK_DAYS + 1) * 86_400_000),
+    );
+    const res = await request(makeApp()).get(`/api/respond/${i.id}`).query(old);
+    expect(res.status).toBe(404);
+    // Pushing the expiry out breaks the signature.
+    const stretched = { ...old, exp: String(Number(old.exp) + 30 * 86_400) };
+    const again = await request(makeApp())
+      .post(`/api/respond/${i.id}`)
+      .send({ ...stretched, action: "REVOKE" });
+    expect(again.status).toBe(404);
+  });
+
+  it("stops working for a member removed from the team, or a deleted channel", async () => {
+    const owner = await signedIn();
+    const member = await signedIn("grace@example.com");
+    const i = await incident(owner.userId);
+    const team = await prisma.team.upsert({
+      where: { ownerId: owner.userId },
+      create: { ownerId: owner.userId, name: "Ada's team" },
+      update: {},
+    });
+    await prisma.teamMember.create({ data: { teamId: team.id, userId: member.userId } });
+    const channel = await prisma.notificationChannel.create({
+      data: { ownerId: owner.userId, type: "SLACK", name: "#security", config: "x" },
+    });
+    const memberLink = linkParts(i.id, `u:${member.userId}`);
+    const channelLink = linkParts(i.id, `c:${channel.id}`);
+    const app = makeApp();
+    expect((await request(app).get(`/api/respond/${i.id}`).query(memberLink)).status).toBe(200);
+
+    await prisma.teamMember.deleteMany({ where: { userId: member.userId } });
+    await prisma.notificationChannel.delete({ where: { id: channel.id } });
+    for (const link of [memberLink, channelLink]) {
+      const res = await request(app)
+        .post(`/api/respond/${i.id}`)
+        .send({ ...link, action: "REVOKE" });
+      expect(res.status).toBe(404);
+    }
+    expect((await prisma.incident.findUniqueOrThrow({ where: { id: i.id } })).status).toBe("OPEN");
   });
 
   it("can't close as a false positive or an accepted risk", async () => {

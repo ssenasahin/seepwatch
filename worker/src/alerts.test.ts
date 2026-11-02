@@ -2,6 +2,7 @@ import {
   ACK_REMINDER_MS,
   OPEN_REMINDER_MS,
   sealConfig,
+  RESPOND_LINK_DAYS,
   verifyRespond,
   type Mail,
   type Mailer,
@@ -148,7 +149,11 @@ describe("runRound without a policy", () => {
     const url = new URL(link);
     expect(url.pathname).toBe(`/respond/${i.id}`);
     expect(url.searchParams.get("by")).toBe(`u:${owner.id}`);
-    expect(verifyRespond(KEY, i.id, `u:${owner.id}`, url.searchParams.get("sig")!)).toBe(true);
+    const exp = Number(url.searchParams.get("exp"));
+    expect(exp).toBe(Math.floor(NOW.getTime() / 1000) + RESPOND_LINK_DAYS * 86_400);
+    expect(verifyRespond(KEY, i.id, `u:${owner.id}`, exp, url.searchParams.get("sig")!, NOW)).toBe(
+      true,
+    );
   });
 
   it("does nothing before the round is due, or twice for the same round", async () => {

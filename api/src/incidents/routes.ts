@@ -34,6 +34,7 @@ const actionBody = z
 // From an alert, only the two things a link promises.
 const signed = z.object({
   by: z.string().regex(/^[uc]:[0-9a-f-]{36}$/),
+  exp: z.coerce.number().int().positive(),
   sig: z.string().min(20).max(100),
 });
 const respondBody = signed.extend({ action: z.enum(["ACKNOWLEDGE", "REVOKE"]) });
@@ -208,13 +209,31 @@ export function respondRouter(prisma: PrismaClient, encryptionKey: Buffer) {
     }),
   );
 
-  async function check(id: string, by: string, sig: string) {
-    if (!verifyRespond(encryptionKey, id, by, sig)) {
-      throw new HttpError(404, "This link isn't valid");
+  async function check(id: string, { by, exp, sig }: z.infer<typeof signed>) {
+    if (!verifyRespond(encryptionKey, id, by, exp, sig)) {
+      throw new HttpError(
+        404,
+        "This link isn't valid, or has run out. Use one from a newer alert.",
+      );
     }
     const incident = await prisma.incident.findUnique({ where: { id }, include: incidentInclude });
     if (!incident) throw new HttpError(404, "This incident no longer exists");
+    // Signed when it was sent, so it says nothing about now: someone removed from the
+    // team, or a channel since deleted, keeps the link but loses the say.
+    if (!(await stillReaches(incident.ownerId, by))) {
+      throw new HttpError(404, "This link was sent to someone no longer on the team");
+    }
     return incident;
+  }
+
+  async function stillReaches(ownerId: string, by: string) {
+    const id = by.slice(2);
+    if (by.startsWith("c:")) {
+      return (await prisma.notificationChannel.count({ where: { id, ownerId } })) > 0;
+    }
+    if (id === ownerId) return true;
+    const member = await prisma.teamMember.count({ where: { userId: id, team: { ownerId } } });
+    return member > 0;
   }
 
   // Who the link was sent to, in words for the timeline.
@@ -250,17 +269,17 @@ export function respondRouter(prisma: PrismaClient, encryptionKey: Buffer) {
 
   router.get("/:id", async (req, res) => {
     const { id } = validate(idParams, req.params);
-    const { by, sig } = validate(signed, req.query);
-    const incident = await check(id, by, sig);
-    res.json({ incident: summary(incident), as: await whoIs(by) });
+    const link = validate(signed, req.query);
+    const incident = await check(id, link);
+    res.json({ incident: summary(incident), as: await whoIs(link.by) });
   });
 
   router.post("/:id", async (req, res) => {
     const { id } = validate(idParams, req.params);
-    const { by, sig, action } = validate(respondBody, req.body);
-    await check(id, by, sig);
-    await applyAction(prisma, id, action, await whoIs(by));
-    res.json({ incident: summary(await check(id, by, sig)) });
+    const { action, ...link } = validate(respondBody, req.body);
+    await check(id, link);
+    await applyAction(prisma, id, action, await whoIs(link.by));
+    res.json({ incident: summary(await check(id, link)) });
   });
 
   return router;

@@ -26,9 +26,20 @@ function linkKey(encryptionKey: Buffer): Buffer {
   return Buffer.from(hkdfSync("sha256", encryptionKey, "", "seepwatch incident links", 32));
 }
 
-export function signRespond(encryptionKey: Buffer, incidentId: string, by: string): string {
+// A link works this long. Every alert round sends fresh ones, so a link that has
+// run out is never the only way to respond; one forwarded or left in an old
+// channel stops working.
+export const RESPOND_LINK_DAYS = 14;
+
+// `exp` is when the link stops working, in seconds since the epoch.
+export function signRespond(
+  encryptionKey: Buffer,
+  incidentId: string,
+  by: string,
+  exp: number,
+): string {
   return createHmac("sha256", linkKey(encryptionKey))
-    .update(`${incidentId}:${by}`)
+    .update(`${incidentId}:${by}:${exp}`)
     .digest("base64url");
 }
 
@@ -36,11 +47,17 @@ export function verifyRespond(
   encryptionKey: Buffer,
   incidentId: string,
   by: string,
+  exp: number,
   sig: string,
+  now = new Date(),
 ): boolean {
-  const expected = Buffer.from(signRespond(encryptionKey, incidentId, by));
+  const expected = Buffer.from(signRespond(encryptionKey, incidentId, by, exp));
   const given = Buffer.from(sig);
-  return given.length === expected.length && timingSafeEqual(given, expected);
+  return (
+    given.length === expected.length &&
+    timingSafeEqual(given, expected) &&
+    exp * 1000 > now.getTime()
+  );
 }
 
 // Opens a page with two buttons, "I'm on it" and "Revoked". The link itself changes
@@ -50,7 +67,9 @@ export function respondLink(
   encryptionKey: Buffer,
   incidentId: string,
   by: string,
+  now = new Date(),
 ) {
-  const sig = signRespond(encryptionKey, incidentId, by);
-  return `${webOrigin}/respond/${incidentId}?by=${encodeURIComponent(by)}&sig=${sig}`;
+  const exp = Math.floor(now.getTime() / 1000) + RESPOND_LINK_DAYS * 86_400;
+  const sig = signRespond(encryptionKey, incidentId, by, exp);
+  return `${webOrigin}/respond/${incidentId}?by=${encodeURIComponent(by)}&exp=${exp}&sig=${sig}`;
 }

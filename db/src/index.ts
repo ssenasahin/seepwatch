@@ -3,7 +3,7 @@ import { PrismaClient } from "./generated/prisma/client.js";
 
 // Besides the Prisma client, this package holds the code the API and the worker share.
 export * from "./generated/prisma/client.js";
-export { decryptSecret, encryptSecret, parseEncryptionKey } from "./crypto.js";
+export { decryptSecret, encryptSecret, looksMadeUp, parseEncryptionKey } from "./crypto.js";
 export { deliver, openConfig, sealConfig, type DeliverOptions } from "./channels/deliver.js";
 export { guardedTransport } from "./channels/transport.js";
 export {
@@ -36,6 +36,7 @@ export {
 export {
   MAX_ESCALATION_STEPS,
   readSteps,
+  RESPOND_LINK_DAYS,
   respondLink,
   signRespond,
   verifyRespond,

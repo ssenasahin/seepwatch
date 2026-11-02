@@ -169,7 +169,7 @@ export async function runRound(deps: AlertDeps, incidentId: string, now = new Da
         plan.kind,
         facts,
         deps.webOrigin,
-        closed ? null : respondLink(deps.webOrigin, deps.encryptionKey, incident.id, r.by),
+        closed ? null : respondLink(deps.webOrigin, deps.encryptionKey, incident.id, r.by, now),
         note,
       ),
     incident.id,
