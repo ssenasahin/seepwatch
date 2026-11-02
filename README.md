@@ -125,6 +125,23 @@ escalation to reminders; only closing ends it, and from an alert the only way to
 **Signed links can't be clicked by a mail scanner.** Opening a link from an alert shows a page; the
 action itself is a POST from that page, signed with HMAC-SHA256 for that incident and that recipient.
 The timeline shows who acted: the address the link was emailed to, or the channel it was posted in.
+A link works for 14 days, and only while its recipient is still on the team or its channel still
+exists. Every alert round sends fresh ones, so an old link running out never leaves anyone without
+a way to respond.
+
+**Signing up doesn't say who has an account.** The form always answers "check your inbox". A new
+address gets a link, and the account is made only when that link is used, so nobody can open an
+account in someone else's name. An address that already has an account gets a note saying so
+instead.
+
+**Wrong passwords lock an address, not the account.** Five wrong passwords from one address lock
+that address out of the account for 15 minutes; the owner signing in from anywhere else isn't
+affected. The account itself locks only after 50 failures from many addresses, or after five wrong
+two-factor codes, since whoever is entering codes already has the password.
+
+**API keys reach the leak data and nothing else.** A key works on `/api/watches`, `/api/findings`
+and `/api/incidents`, so a script can read what was found and say a leak is being dealt with. It
+can't manage keys, the team, channels or the account, so revoking a leaked key is enough.
 
 ## What is stored
 
@@ -132,7 +149,7 @@ The timeline shows who acted: the address the link was emailed to, or the channe
 | ------------------------------------------------ | ------------------------------------------------------------------- |
 | Passwords                                        | argon2id hash                                                       |
 | TOTP secrets, channel tokens and webhook secrets | AES-256-GCM, key from `ENCRYPTION_KEY`                              |
-| Refresh tokens, API keys, reset and invite links | SHA-256 hash                                                        |
+| Refresh tokens, API keys, emailed links          | SHA-256 hash                                                        |
 | Access tokens                                    | Signed JWT, 15 minutes, kept in browser memory only                 |
 | Admin actions                                    | Append-only audit log (a database trigger blocks edits and deletes) |
 
