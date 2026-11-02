@@ -46,8 +46,10 @@ export function ApiKeysPage() {
         <div>
           <h1>API keys</h1>
           <p>
-            Let a script or another program read your findings and incidents. The public API arrives
-            with the scanners; keys made now will work with it.
+            Let a script or another program use <code className="mono">/api/watches</code>,{" "}
+            <code className="mono">/api/findings</code> and{" "}
+            <code className="mono">/api/incidents</code>: read what was found, add watches, and say
+            a leak is being dealt with.
           </p>
         </div>
       </header>
@@ -85,7 +87,8 @@ export function ApiKeysPage() {
           )}
           {keys.data && active.length === 0 && (
             <EmptyState icon={KeyRound} title="No API keys">
-              A key acts as you, for findings only: it can't change your password, team or alerts.
+              A key acts as you, for watches, findings and incidents only: it can't change your
+              password, team, alerts or keys.
             </EmptyState>
           )}
           {active.length > 0 && (
